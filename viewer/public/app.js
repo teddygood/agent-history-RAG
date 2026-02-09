@@ -42,6 +42,7 @@ const ingestSampleBtn = document.getElementById("ingestSample");
 const ingestHistoryBtn = document.getElementById("ingestHistory");
 
 let lastGraphData = null;
+let busyCounter = 0;
 
 runQueryBtn.addEventListener("click", runQuery);
 loadGraphBtn.addEventListener("click", loadGraph);
@@ -65,46 +66,56 @@ bindSlider(graphNodeScaleInput, graphNodeScaleVal, (v) => Number(v).toFixed(1), 
 setStatus("준비 완료. 1) Ingest Agent History 2) Run Query 3) Load Graph 순서로 진행하세요.", "info");
 
 async function ingestSample() {
+  if (isBusy()) return;
+  setStatus("Sample ingest 실행 중...", "info");
+  pushBusy();
   const payload = { path: "/workspace/data/samples/conversation.jsonl" };
-  const res = await fetch("/ingest/jsonl", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    setStatus(`Ingest sample failed: ${await res.text()}`, "error");
-    return;
+  try {
+    const res = await requestJson("/ingest/jsonl", payload, { timeoutMs: 120000 });
+    if (!res.ok) return;
+    setStatus("Sample ingest 완료. Query를 확인하고 Load Graph로 그래프를 보세요.", "success");
+    await runQuery();
+    await loadGraph();
+  } finally {
+    popBusy();
   }
-  setStatus("Sample ingest 완료. Query를 확인하고 Load Graph로 그래프를 보세요.", "success");
-  await runQuery();
-  await loadGraph();
 }
 
 async function ingestHistory() {
+  if (isBusy()) return;
+  setStatus("History ingest 실행 중... (대화량이 많으면 오래 걸릴 수 있어요)", "info");
+  pushBusy();
   const payload = {
     source: "both",
     max_files: 500,
   };
-  const res = await fetch("/ingest/history", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    setStatus(`History ingest failed: ${await res.text()}`, "error");
-    return;
+  try {
+    const res = await requestJson("/ingest/history", payload, { timeoutMs: 15 * 60 * 1000 });
+    if (!res.ok) return;
+    const data = res.data || {};
+    setStatus(
+      `History ingest 완료: turns=${data.ingested_turns}, entities=${data.extracted_entities}, relations=${data.extracted_relations}. 다음: 1) Query 입력 2) Run Query 3) Graph Seed 입력 후 Load Graph`,
+      "success"
+    );
+  } finally {
+    popBusy();
   }
-
-  const data = await res.json();
-  setStatus(
-    `History ingest 완료: turns=${data.ingested_turns}, entities=${data.extracted_entities}, relations=${data.extracted_relations}. 다음: 1) Query 입력 2) Run Query 3) Graph Seed 입력 후 Load Graph`,
-    "success"
-  );
 }
 
 async function runQuery() {
+  if (isBusy()) return;
+  const queryText = queryInput.value.trim();
+  if (!queryText) {
+    setStatus("Query가 비어있습니다. 입력 후 Run Query를 눌러주세요.", "error");
+    return;
+  }
+  const rerankHint = rerankEnabledInput.checked
+    ? " (리랭커 최초 로딩은 모델 다운로드로 몇 분 걸릴 수 있어요)"
+    : "";
+  setStatus(`Query 실행 중...${rerankHint}`, "info");
+  pushBusy();
   const payload = {
-    query: queryInput.value,
+    query: queryText,
     top_k: Number(topKInput.value),
     max_hops: Number(maxHopsInput.value),
     beam_width: Number(beamWidthInput.value),
@@ -119,23 +130,22 @@ async function runQuery() {
     rerank_enabled: rerankEnabledInput.checked,
     rerank_top_n: Number(rerankTopNInput.value),
   };
-  const res = await fetch("/query", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    turnList.innerHTML = `<li class="turn-item">Query failed: ${await res.text()}</li>`;
-    appliedParamsEl.textContent = "";
-    setStatus("Query 실행 실패. 입력값과 서버 상태를 확인하세요.", "error");
-    return;
+  try {
+    const res = await requestJson("/query", payload, {
+      timeoutMs: rerankEnabledInput.checked ? 15 * 60 * 1000 : 2 * 60 * 1000,
+    });
+    if (!res.ok) {
+      turnList.innerHTML = `<li class="turn-item">Query failed: ${escapeHtml(res.text || "")}</li>`;
+      appliedParamsEl.textContent = "";
+      return;
+    }
+    const data = res.data || {};
+    renderAppliedParams(data.applied_params || payload);
+    renderTurns(data.selected_turns || []);
+    setStatus(`Query 완료: ${data.selected_turns?.length || 0}개 턴을 찾았습니다.`, "info");
+  } finally {
+    popBusy();
   }
-
-  const data = await res.json();
-  renderAppliedParams(data.applied_params || payload);
-  renderTurns(data.selected_turns || []);
-  setStatus(`Query 완료: ${data.selected_turns?.length || 0}개 턴을 찾았습니다.`, "info");
 }
 
 function renderAppliedParams(params) {
@@ -200,20 +210,29 @@ function renderTurns(turns) {
 }
 
 async function loadGraph() {
+  if (isBusy()) return;
   const seed = seedInput.value.trim();
-  if (!seed) return;
-
-  const graphLimit = Number(graphLimitInput.value);
-  const res = await fetch(`/graph/subgraph?seed=${encodeURIComponent(seed)}&limit=${graphLimit}`);
-  if (!res.ok) {
-    setStatus(`Graph load failed: ${await res.text()}`, "error");
+  if (!seed) {
+    setStatus("Graph Seed가 비어있습니다. 입력 후 Load Graph를 눌러주세요.", "error");
     return;
   }
 
-  const graph = await res.json();
-  lastGraphData = graph;
-  renderGraph(graph.nodes || [], graph.edges || []);
-  setStatus(`Graph 로드 완료: nodes=${graph.nodes?.length || 0}, edges=${graph.edges?.length || 0}`, "info");
+  setStatus("Graph 로딩 중...", "info");
+  pushBusy();
+  const graphLimit = Number(graphLimitInput.value);
+  try {
+    const res = await requestJson(`/graph/subgraph?seed=${encodeURIComponent(seed)}&limit=${graphLimit}`, null, {
+      method: "GET",
+      timeoutMs: 120000,
+    });
+    if (!res.ok) return;
+    const graph = res.data || {};
+    lastGraphData = graph;
+    renderGraph(graph.nodes || [], graph.edges || []);
+    setStatus(`Graph 로드 완료: nodes=${graph.nodes?.length || 0}, edges=${graph.edges?.length || 0}`, "info");
+  } finally {
+    popBusy();
+  }
 }
 
 function renderGraph(nodes, edges) {
@@ -371,6 +390,73 @@ function rerenderGraphIfLoaded() {
 function setStatus(message, level = "info") {
   statusBannerEl.textContent = message;
   statusBannerEl.className = `status-banner status-${level}`;
+}
+
+function setBusy(isBusyFlag) {
+  const buttons = [runQueryBtn, loadGraphBtn, ingestSampleBtn, ingestHistoryBtn];
+  for (const button of buttons) {
+    button.disabled = Boolean(isBusyFlag);
+  }
+}
+
+function isBusy() {
+  return busyCounter > 0;
+}
+
+function pushBusy() {
+  busyCounter += 1;
+  setBusy(true);
+}
+
+function popBusy() {
+  busyCounter = Math.max(0, busyCounter - 1);
+  setBusy(busyCounter > 0);
+}
+
+function describeError(err) {
+  if (!err) return "unknown error";
+  if (err.name === "AbortError") return "request timed out";
+  if (typeof err === "string") return err;
+  return err.message || String(err);
+}
+
+async function requestJson(url, payload, options = {}) {
+  const {
+    method = payload === null ? "GET" : "POST",
+    timeoutMs = 120000,
+    headers = payload === null ? {} : { "Content-Type": "application/json" },
+  } = options;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: payload === null ? undefined : JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (_) {
+      data = null;
+    }
+
+    if (!res.ok) {
+      setStatus(`${method} ${url} 실패: ${text || res.status}`, "error");
+    }
+
+    return { ok: res.ok, status: res.status, text, data };
+  } catch (err) {
+    setStatus(`네트워크 오류: ${describeError(err)}`, "error");
+    return { ok: false, status: 0, text: "", data: null };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function formatDateTime(value) {

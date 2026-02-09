@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from app.retrieval.graph_retriever import GraphRetriever
 from app.services.embedder import HashEmbedder
 from app.services.extractor import HeuristicExtractor
+from app.services.history_loader import AgentHistoryLoader
 from app.services.ingestion import IngestionService
 from app.services.jsonl_loader import JSONLLoader
 from app.services.neo4j_store import Neo4jStore
@@ -18,6 +19,7 @@ class AppRuntime:
     ingestion: IngestionService
     retriever: GraphRetriever
     jsonl_loader: JSONLLoader
+    history_loader: AgentHistoryLoader
 
     @classmethod
     def create(cls) -> "AppRuntime":
@@ -34,6 +36,7 @@ class AppRuntime:
             ingestion=ingestion,
             retriever=retriever,
             jsonl_loader=JSONLLoader(),
+            history_loader=AgentHistoryLoader(),
         )
 
     def close(self) -> None:

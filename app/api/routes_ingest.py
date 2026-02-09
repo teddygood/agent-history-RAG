@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_runtime
 from app.models.schemas import (
     ConversationIngestRequest,
+    HistoryIngestRequest,
     IngestResponse,
     JSONLIngestRequest,
     RebuildConversationRequest,
@@ -115,6 +116,29 @@ def ingest_jsonl(
 
     return IngestResponse(
         conversation_id=conversation_id,
+        ingested_turns=stats.turns,
+        extracted_entities=stats.entities,
+        extracted_relations=stats.relations,
+    )
+
+
+@router.post("/history", response_model=IngestResponse)
+def ingest_history(
+    request: HistoryIngestRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> IngestResponse:
+    turns = runtime.history_loader.load(
+        source=request.source,
+        codex_history_path=request.codex_history_path,
+        claude_projects_root=request.claude_projects_root,
+        max_files=request.max_files,
+    )
+    if not turns:
+        raise HTTPException(status_code=404, detail="no history turns found from given paths")
+
+    stats = runtime.ingestion.ingest_turns(turns)
+    return IngestResponse(
+        conversation_id=f"{request.source}:bulk-import",
         ingested_turns=stats.turns,
         extracted_entities=stats.entities,
         extracted_relations=stats.relations,

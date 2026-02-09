@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -21,6 +22,13 @@ class ConversationIngestRequest(BaseModel):
 
 class JSONLIngestRequest(BaseModel):
     path: str
+
+
+class HistoryIngestRequest(BaseModel):
+    source: Literal["codex", "claude", "both"] = "both"
+    codex_history_path: str = "~/.codex/history.jsonl"
+    claude_projects_root: str = "~/.claude/projects"
+    max_files: int | None = Field(default=None, ge=1, le=10000)
 
 
 class RebuildConversationRequest(BaseModel):

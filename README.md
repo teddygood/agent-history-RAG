@@ -14,6 +14,8 @@ This project builds a traceable RAG pipeline over conversation logs using an ent
 - Canonical entity normalization + alias merging
 - Entity-to-entity semantic relation graph with evidence turn IDs
 - Query-time entity seeding + graph traversal + Top-K turn retrieval
+- Real-time query tuning sliders (max hops, beam width, prune threshold, importance/recency weights)
+- Importance-aware and recall-time-aware ranking (`importance_score`, `last_recalled_at`)
 - Structured reasoning trace in API output
 - Minimal D3 graph viewer
 
@@ -42,7 +44,7 @@ curl -X POST http://localhost:8000/ingest/jsonl \
 ```bash
 curl -X POST http://localhost:8000/query \
   -H 'Content-Type: application/json' \
-  -d '{"query":"continuous batching이 paged attention과 어떤 관계야?", "top_k":5}'
+  -d '{"query":"continuous batching이 paged attention과 어떤 관계야?", "top_k":5, "max_hops":3, "beam_width":24, "prune_threshold":0.1, "importance_weight":0.18, "recency_weight":0.12, "recall_half_life_hours":72}'
 ```
 
 ### 4) Open viewer

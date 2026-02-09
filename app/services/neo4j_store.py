@@ -23,6 +23,7 @@ class Neo4jStore:
         queries = [
             "CREATE CONSTRAINT turn_uid_unique IF NOT EXISTS FOR (t:Turn) REQUIRE t.turn_uid IS UNIQUE",
             "CREATE CONSTRAINT entity_id_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.entity_id IS UNIQUE",
+            "CREATE FULLTEXT INDEX turn_text_fulltext IF NOT EXISTS FOR (t:Turn) ON EACH [t.text]",
         ]
         with self.driver.session() as session:
             for query in queries:
@@ -229,6 +230,50 @@ class Neo4jStore:
         """
         params = {
             "entity_ids": ids,
+            "conversation_id": conversation_id,
+            "limit": limit,
+        }
+        with self.driver.session() as session:
+            records = session.run(query, params)
+            return [dict(record) for record in records]
+
+    def search_turns_fulltext(
+        self,
+        *,
+        query_text: str,
+        conversation_id: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        if not query_text.strip():
+            return []
+
+        query = """
+        CALL db.index.fulltext.queryNodes('turn_text_fulltext', $query_text, {limit: $limit})
+        YIELD node, score
+        WHERE ($conversation_id IS NULL OR node.conversation_id = $conversation_id)
+        OPTIONAL MATCH (node)-[:MENTIONS]->(e:Entity)
+        RETURN node.turn_uid AS turn_uid,
+               node.conversation_id AS conversation_id,
+               node.turn_id AS turn_id,
+               node.speaker AS speaker,
+               node.text AS text,
+               node.timestamp AS timestamp,
+               coalesce(node.embedding, []) AS embedding,
+               coalesce(node.importance_score, 0.0) AS importance_score,
+               coalesce(node.chunk_profile, 'default') AS chunk_profile,
+               coalesce(node.chunk_count, 1) AS chunk_count,
+               coalesce(node.chunk_size, 0) AS chunk_size,
+               coalesce(node.chunk_overlap, 0) AS chunk_overlap,
+               node.last_recalled_at AS last_recalled_at,
+               coalesce(node.recall_count, 0) AS recall_count,
+               coalesce(score, 0.0) AS lexical_score,
+               collect(DISTINCT e.entity_id) AS matched_entity_ids,
+               collect(DISTINCT e.canonical_name) AS matched_entities
+        ORDER BY lexical_score DESC
+        LIMIT $limit
+        """
+        params = {
+            "query_text": query_text,
             "conversation_id": conversation_id,
             "limit": limit,
         }

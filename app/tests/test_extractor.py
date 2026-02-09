@@ -18,3 +18,13 @@ def test_relation_type_detection() -> None:
     relations = extractor.extract_relations(text, entities)
     assert relations
     assert relations[0].relation_type == "COMPARES"
+
+
+def test_extract_korean_concepts_and_normalize() -> None:
+    extractor = HeuristicExtractor()
+    text = "연속 배칭과 페이지드 어텐션 관계를 설명해줘"
+    entities = extractor.extract_entities(text)
+    names = {item.canonical_name for item in entities}
+
+    assert "continuous batching" in names
+    assert "paged attention" in names

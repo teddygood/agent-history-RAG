@@ -4,6 +4,8 @@ from app.services.normalize import canonicalize, to_entity_id
 def test_canonicalize_synonym() -> None:
     assert canonicalize("PagedAttention") == "paged attention"
     assert canonicalize("GraphRAG") == "graph-centric rag"
+    assert canonicalize("연속 배칭") == "continuous batching"
+    assert canonicalize("그래프 기반 RAG") == "graph-centric rag"
 
 
 def test_entity_id_stable() -> None:

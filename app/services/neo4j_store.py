@@ -38,6 +38,7 @@ class Neo4jStore:
         text: str,
         timestamp: datetime,
         embedding: list[float],
+        importance_score: float = 0.0,
     ) -> None:
         query = """
         MERGE (t:Turn {turn_uid: $turn_uid})
@@ -47,6 +48,8 @@ class Neo4jStore:
             t.text = $text,
             t.timestamp = datetime($timestamp),
             t.embedding = $embedding,
+            t.importance_score = $importance_score,
+            t.recall_count = coalesce(t.recall_count, 0),
             t.updated_at = datetime()
         """
         params = {
@@ -57,6 +60,7 @@ class Neo4jStore:
             "text": text,
             "timestamp": timestamp.isoformat(),
             "embedding": embedding,
+            "importance_score": importance_score,
         }
         with self.driver.session() as session:
             session.run(query, params)
@@ -200,6 +204,9 @@ class Neo4jStore:
                t.text AS text,
                t.timestamp AS timestamp,
                coalesce(t.embedding, []) AS embedding,
+               coalesce(t.importance_score, 0.0) AS importance_score,
+               t.last_recalled_at AS last_recalled_at,
+               coalesce(t.recall_count, 0) AS recall_count,
                collect(DISTINCT e.entity_id) AS matched_entity_ids,
                collect(DISTINCT e.canonical_name) AS matched_entities
         LIMIT $limit
@@ -255,6 +262,21 @@ class Neo4jStore:
         with self.driver.session() as session:
             records = session.run(query, {"conversation_id": conversation_id, "limit": limit})
             return [dict(record) for record in records]
+
+    def mark_turns_recalled(self, turn_uids: Iterable[str], recalled_at: datetime) -> None:
+        ids = list(dict.fromkeys(turn_uids))
+        if not ids:
+            return
+
+        query = """
+        UNWIND $turn_uids AS turn_uid
+        MATCH (t:Turn {turn_uid: turn_uid})
+        SET t.last_recalled_at = datetime($recalled_at),
+            t.recall_count = coalesce(t.recall_count, 0) + 1,
+            t.updated_at = datetime()
+        """
+        with self.driver.session() as session:
+            session.run(query, {"turn_uids": ids, "recalled_at": recalled_at.isoformat()})
 
     def build_subgraph(self, seed: str, limit: int = 120) -> dict[str, list[dict[str, Any]]]:
         seeds = self.search_entities(seed, limit=8)

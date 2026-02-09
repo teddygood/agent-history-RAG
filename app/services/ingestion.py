@@ -6,6 +6,7 @@ from typing import Iterable
 from app.models.schemas import IngestStats, TurnInput
 from app.services.embedder import HashEmbedder
 from app.services.extractor import HeuristicExtractor
+from app.services.importance import score_turn_importance
 from app.services.neo4j_store import Neo4jStore
 from app.services.normalize import canonicalize, to_entity_id
 
@@ -28,6 +29,7 @@ class IngestionService:
         for turn in turns:
             turn_uid = f"{turn.conversation_id}:{turn.turn_id}"
             turn_embedding = self.embedder.embed(turn.text)
+            importance_score = score_turn_importance(turn.text)
             self.store.upsert_turn(
                 turn_uid=turn_uid,
                 conversation_id=turn.conversation_id,
@@ -36,6 +38,7 @@ class IngestionService:
                 text=turn.text,
                 timestamp=turn.timestamp,
                 embedding=turn_embedding,
+                importance_score=importance_score,
             )
             stats.turns += 1
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+import math
 from typing import Any
 
 from app.core.config import settings
@@ -19,6 +20,10 @@ RELATION_PRIORS = {
     "COMPARES": 0.82,
     "RELATED_TO": 0.70,
 }
+
+DEFAULT_IMPORTANCE_WEIGHT = 0.18
+DEFAULT_RECENCY_WEIGHT = 0.12
+DEFAULT_RECALL_HALF_LIFE_HOURS = 72
 
 
 @dataclass
@@ -44,6 +49,24 @@ class GraphRetriever:
         query_embedding = self.embedder.embed(request.query)
         seed_candidates = self._find_seed_entities(request.query)
 
+        max_hops = request.max_hops or settings.graph_max_hops
+        beam_width = request.beam_width or settings.graph_beam_width
+        prune_threshold = request.prune_threshold if request.prune_threshold is not None else settings.graph_prune_threshold
+        importance_weight = (
+            request.importance_weight if request.importance_weight is not None else DEFAULT_IMPORTANCE_WEIGHT
+        )
+        recency_weight = request.recency_weight if request.recency_weight is not None else DEFAULT_RECENCY_WEIGHT
+        recall_half_life_hours = request.recall_half_life_hours or DEFAULT_RECALL_HALF_LIFE_HOURS
+        applied_params: dict[str, float | int] = {
+            "max_hops": max_hops,
+            "beam_width": beam_width,
+            "prune_threshold": round(prune_threshold, 6),
+            "importance_weight": round(importance_weight, 6),
+            "recency_weight": round(recency_weight, 6),
+            "recall_half_life_hours": recall_half_life_hours,
+            "top_k": request.top_k,
+        }
+
         if not seed_candidates:
             return QueryResponse(
                 query=request.query,
@@ -51,11 +74,8 @@ class GraphRetriever:
                 matched_seed_entities=[],
                 selected_turns=[],
                 pruned_paths=0,
+                applied_params=applied_params,
             )
-
-        max_hops = request.max_hops or settings.graph_max_hops
-        beam_width = request.beam_width or settings.graph_beam_width
-        prune_threshold = settings.graph_prune_threshold
 
         reached, pruned_paths = self._traverse_graph(
             seed_candidates=seed_candidates,
@@ -76,15 +96,25 @@ class GraphRetriever:
             turn_rows=turn_rows,
             reached_entities=reached,
             query_embedding=query_embedding,
+            importance_weight=importance_weight,
+            recency_weight=recency_weight,
+            recall_half_life_hours=recall_half_life_hours,
         )
+        selected_turns = turn_results[: request.top_k]
+        if selected_turns:
+            recalled_at = datetime.now(timezone.utc)
+            self.store.mark_turns_recalled([turn.turn_uid for turn in selected_turns], recalled_at=recalled_at)
+            for turn in selected_turns:
+                turn.last_recalled_at = recalled_at
 
         seed_names = [seed["canonical_name"] for seed in seed_candidates[:8]]
         return QueryResponse(
             query=request.query,
             top_k=request.top_k,
             matched_seed_entities=seed_names,
-            selected_turns=turn_results[: request.top_k],
+            selected_turns=selected_turns,
             pruned_paths=pruned_paths,
+            applied_params=applied_params,
         )
 
     def _find_seed_entities(self, query_text: str) -> list[dict[str, Any]]:
@@ -198,8 +228,12 @@ class GraphRetriever:
         turn_rows: list[dict[str, Any]],
         reached_entities: dict[str, EntityPath],
         query_embedding: list[float],
+        importance_weight: float,
+        recency_weight: float,
+        recall_half_life_hours: int,
     ) -> list[TurnResult]:
         results: list[TurnResult] = []
+        now = datetime.now(timezone.utc)
 
         for row in turn_rows:
             matched_entity_ids = row.get("matched_entity_ids", [])
@@ -219,10 +253,21 @@ class GraphRetriever:
                     evidence_turn_ids.update(step.evidence_turn_ids)
 
             text_similarity = max(0.0, self.embedder.cosine_similarity(query_embedding, row.get("embedding", [])))
+            importance_score = float(row.get("importance_score", 0.0))
+            last_recalled_at = self._to_optional_datetime(row.get("last_recalled_at"))
 
             normalized_entity_score = min(1.0, entity_score / max(1.0, len(matched_entity_ids)))
             evidence_bonus = 0.1 if row["turn_uid"] in evidence_turn_ids else 0.0
-            final_score = normalized_entity_score * 0.72 + text_similarity * 0.18 + evidence_bonus
+            base_score = normalized_entity_score * 0.72 + text_similarity * 0.18 + evidence_bonus
+
+            recency_factor = self._compute_recency_factor(
+                now=now,
+                anchor=last_recalled_at or self._to_datetime(row.get("timestamp")),
+                half_life_hours=recall_half_life_hours,
+            )
+            importance_component = importance_weight * importance_score
+            recency_component = recency_weight * recency_factor
+            final_score = base_score + importance_component + recency_component
 
             timestamp = self._to_datetime(row.get("timestamp"))
             turn_result = TurnResult(
@@ -233,9 +278,21 @@ class GraphRetriever:
                 timestamp=timestamp,
                 text=row["text"],
                 score=round(final_score, 6),
+                score_breakdown={
+                    "base_score": round(base_score, 6),
+                    "entity_score": round(normalized_entity_score, 6),
+                    "text_similarity": round(text_similarity, 6),
+                    "evidence_bonus": round(evidence_bonus, 6),
+                    "importance_component": round(importance_component, 6),
+                    "recency_component": round(recency_component, 6),
+                    "final_score": round(final_score, 6),
+                },
                 matched_entities=matched_entities,
                 path_summary=self._dedup_steps(path_steps, limit=8),
                 evidence_turn_ids=sorted(evidence_turn_ids),
+                importance_score=round(importance_score, 6),
+                recency_factor=round(recency_factor, 6),
+                last_recalled_at=last_recalled_at,
             )
             results.append(turn_result)
 
@@ -256,6 +313,15 @@ class GraphRetriever:
         return deduped
 
     def _to_datetime(self, value: Any) -> datetime:
+        optional = self._to_optional_datetime(value)
+        if optional is not None:
+            return optional
+        return datetime.now(timezone.utc)
+
+    def _to_optional_datetime(self, value: Any) -> datetime | None:
+        if value is None:
+            return None
+
         if isinstance(value, datetime):
             return value
 
@@ -270,5 +336,15 @@ class GraphRetriever:
         if isinstance(value, str):
             normalized = value.replace("Z", "+00:00")
             return datetime.fromisoformat(normalized)
+        return None
 
-        return datetime.utcnow()
+    def _compute_recency_factor(self, *, now: datetime, anchor: datetime, half_life_hours: int) -> float:
+        if half_life_hours <= 0:
+            return 1.0
+        if now.tzinfo is None and anchor.tzinfo is not None:
+            now = now.replace(tzinfo=anchor.tzinfo)
+        elif now.tzinfo is not None and anchor.tzinfo is None:
+            anchor = anchor.replace(tzinfo=now.tzinfo)
+        age_hours = max(0.0, (now - anchor).total_seconds() / 3600.0)
+        decay = math.exp(-math.log(2.0) * age_hours / float(half_life_hours))
+        return max(0.0, min(1.0, decay))

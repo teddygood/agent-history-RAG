@@ -40,6 +40,10 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
     max_hops: int | None = Field(default=None, ge=1, le=6)
     beam_width: int | None = Field(default=None, ge=4, le=200)
+    prune_threshold: float | None = Field(default=None, ge=0.01, le=1.0)
+    importance_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    recency_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    recall_half_life_hours: int | None = Field(default=None, ge=1, le=720)
 
 
 class TracePathStep(BaseModel):
@@ -59,9 +63,13 @@ class TurnResult(BaseModel):
     timestamp: datetime
     text: str
     score: float
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
     matched_entities: list[str] = Field(default_factory=list)
     path_summary: list[TracePathStep] = Field(default_factory=list)
     evidence_turn_ids: list[str] = Field(default_factory=list)
+    importance_score: float = 0.0
+    recency_factor: float = 1.0
+    last_recalled_at: datetime | None = None
 
 
 class QueryResponse(BaseModel):
@@ -70,6 +78,7 @@ class QueryResponse(BaseModel):
     matched_seed_entities: list[str] = Field(default_factory=list)
     selected_turns: list[TurnResult] = Field(default_factory=list)
     pruned_paths: int
+    applied_params: dict[str, float | int] = Field(default_factory=dict)
 
 
 class EntityOut(BaseModel):

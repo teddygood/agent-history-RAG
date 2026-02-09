@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 import math
 from typing import Iterable
+from collections.abc import Sized
 
 from app.models.schemas import IngestStats, TurnInput
 from app.services.embedder import Embedder, HashEmbedder
@@ -32,6 +33,8 @@ class IngestionService:
         chunk_profile_counter: Counter[str] = Counter()
         total_chunks = 0
         max_chunks = 0
+
+        total_turns: int | None = len(turns) if isinstance(turns, Sized) else None
 
         for turn in turns:
             turn_uid = f"{turn.conversation_id}:{turn.turn_id}"
@@ -112,6 +115,7 @@ class IngestionService:
         stats.debug["avg_chunks_per_turn"] = round(total_chunks / max(1, stats.turns), 3)
         stats.debug["max_chunks_per_turn"] = max_chunks
         stats.debug["chunk_profile"] = chunk_profile
+        stats.debug["total_turns"] = total_turns
         return stats
 
     def get_chunking_settings(self) -> dict[str, int | float]:
@@ -126,7 +130,8 @@ class IngestionService:
         }
 
     def _embed_chunks(self, chunks: tuple[str, ...]) -> list[float]:
-        vectors = [self.embedder.embed_document(chunk) for chunk in chunks if chunk]
+        materialized = [chunk for chunk in chunks if chunk]
+        vectors = self.embedder.embed_documents(materialized) if materialized else []
         if not vectors:
             return self.embedder.embed_document("")
         if len(vectors) == 1:

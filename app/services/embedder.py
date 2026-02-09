@@ -20,6 +20,12 @@ class Embedder(Protocol):
     def embed(self, text: str) -> list[float]:
         ...
 
+    def embed_queries(self, texts: list[str]) -> list[list[float]]:
+        ...
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        ...
+
     def embed_query(self, text: str) -> list[float]:
         ...
 
@@ -37,6 +43,12 @@ class _BaseEmbedder:
 
     def embed(self, text: str) -> list[float]:
         raise NotImplementedError
+
+    def embed_queries(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(text) for text in texts]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_document(text) for text in texts]
 
     def embed_query(self, text: str) -> list[float]:
         return self.embed(text)
@@ -169,17 +181,33 @@ class SentenceTransformerEmbedder(_BaseEmbedder):
         self.dim = int(self.model.get_sentence_embedding_dimension() or settings.embedding_dim)
 
     def embed(self, text: str) -> list[float]:
-        encoded = self.model.encode([text], normalize_embeddings=True)
-        vector = encoded[0]
-        if hasattr(vector, "tolist"):
-            return [float(v) for v in vector.tolist()]
-        return [float(v) for v in vector]
+        encoded = self.model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+        return self._coerce_matrix(encoded)[0]
+
+    def embed_queries(self, texts: list[str]) -> list[list[float]]:
+        prepared = [f"{self.query_prefix}{text}" if self.query_prefix else text for text in texts]
+        encoded = self.model.encode(prepared, normalize_embeddings=True, show_progress_bar=False)
+        return self._coerce_matrix(encoded)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        prepared = [f"{self.document_prefix}{text}" if self.document_prefix else text for text in texts]
+        encoded = self.model.encode(prepared, normalize_embeddings=True, show_progress_bar=False)
+        return self._coerce_matrix(encoded)
 
     def embed_query(self, text: str) -> list[float]:
         return self.embed(f"{self.query_prefix}{text}" if self.query_prefix else text)
 
     def embed_document(self, text: str) -> list[float]:
         return self.embed(f"{self.document_prefix}{text}" if self.document_prefix else text)
+
+    @staticmethod
+    def _coerce_matrix(matrix: object) -> list[list[float]]:
+        if hasattr(matrix, "tolist"):
+            matrix = matrix.tolist()  # type: ignore[assignment]
+        if isinstance(matrix, list):
+            return [[float(v) for v in row] for row in matrix]
+        # Fallback: treat as iterable of iterables
+        return [[float(v) for v in row] for row in matrix]  # type: ignore[arg-type]
 
 
 def create_embedder(

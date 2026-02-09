@@ -6,6 +6,7 @@ import threading
 from typing import Any, TYPE_CHECKING
 import uuid
 
+from app.core.config import settings
 from app.models.schemas import HistoryIngestRequest, IngestStats
 
 if TYPE_CHECKING:
@@ -133,6 +134,8 @@ class IngestJobManager:
                 return
 
             self._update(job_id, phase="ingesting", turns_total=len(turns), updated_at=_utcnow())
+            latest_processed = 0
+            latest_total: int | None = len(turns)
 
             def is_cancelled() -> bool:
                 with self._lock:
@@ -140,6 +143,9 @@ class IngestJobManager:
                     return bool(job and job.cancel_requested)
 
             def on_progress(stats: IngestStats, processed: int, total: int | None) -> None:
+                nonlocal latest_processed, latest_total
+                latest_processed = processed
+                latest_total = total
                 self._update(
                     job_id,
                     phase="ingesting",
@@ -156,6 +162,8 @@ class IngestJobManager:
                 progress=on_progress,
                 progress_every=25,
                 cancel=is_cancelled,
+                batch_size=settings.ingest_batch_size,
+                skip_existing_turns=settings.ingest_skip_existing_history,
             )
 
             if is_cancelled():
@@ -163,7 +171,8 @@ class IngestJobManager:
                     job_id,
                     status="cancelled",
                     phase="cancelled",
-                    turns_processed=stats.turns,
+                    turns_processed=latest_processed,
+                    turns_total=latest_total,
                     extracted_entities=stats.entities,
                     extracted_relations=stats.relations,
                     finished_at=_utcnow(),
@@ -175,7 +184,8 @@ class IngestJobManager:
                 job_id,
                 status="succeeded",
                 phase="done",
-                turns_processed=stats.turns,
+                turns_processed=latest_processed,
+                turns_total=latest_total,
                 extracted_entities=stats.entities,
                 extracted_relations=stats.relations,
                 finished_at=_utcnow(),
@@ -212,4 +222,3 @@ class IngestJobManager:
                 str(request.chunk_profile),
             ]
         )
-

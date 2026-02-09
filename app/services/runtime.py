@@ -10,6 +10,7 @@ from app.services.history_loader import AgentHistoryLoader
 from app.services.ingestion import IngestionService
 from app.services.jsonl_loader import JSONLLoader
 from app.services.neo4j_store import Neo4jStore
+from app.services.reranker import Reranker, create_reranker
 
 
 @dataclass
@@ -17,6 +18,7 @@ class AppRuntime:
     store: Neo4jStore
     extractor: HeuristicExtractor
     embedder: Embedder
+    reranker: Reranker
     ingestion: IngestionService
     retriever: GraphRetriever
     jsonl_loader: JSONLLoader
@@ -28,12 +30,14 @@ class AppRuntime:
         store.init_schema()
         extractor = HeuristicExtractor()
         embedder = create_embedder()
+        reranker = create_reranker()
         ingestion = IngestionService(store=store, extractor=extractor, embedder=embedder)
-        retriever = GraphRetriever(store=store, extractor=extractor, embedder=embedder)
+        retriever = GraphRetriever(store=store, extractor=extractor, embedder=embedder, reranker=reranker)
         return cls(
             store=store,
             extractor=extractor,
             embedder=embedder,
+            reranker=reranker,
             ingestion=ingestion,
             retriever=retriever,
             jsonl_loader=JSONLLoader(),
@@ -52,4 +56,5 @@ class AppRuntime:
                 "model_candidates": list(settings.embedding_model_candidates),
             },
             "chunking": self.ingestion.get_chunking_settings(),
+            "reranker": self.reranker.status(),
         }

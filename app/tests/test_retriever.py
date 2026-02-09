@@ -110,6 +110,13 @@ class FakeStore:
             },
         ]
 
+    def search_turns_fulltext(self, *, query_text: str, conversation_id=None, limit: int = 200):
+        _ = query_text, conversation_id, limit
+        rows = self.fetch_turns_for_entities([], conversation_id=conversation_id, limit=limit)
+        rows[0]["lexical_score"] = 1.2
+        rows[1]["lexical_score"] = 1.4
+        return rows
+
     def mark_turns_recalled(self, turn_uids, recalled_at):
         _ = recalled_at
         self.marked_turns = list(turn_uids)
@@ -151,6 +158,174 @@ def test_importance_weight_can_change_top_rank() -> None:
 
     assert response.selected_turns
     assert response.selected_turns[0].turn_uid == "conv-1:t2"
+
+
+def test_lexical_only_retrieval_works_without_entity_seed() -> None:
+    class LexicalOnlyStore(FakeStore):
+        def search_entities(self, query_text: str, limit: int = 25):
+            _ = query_text, limit
+            return []
+
+        def fetch_turns_for_entities(self, entity_ids, conversation_id=None, limit: int = 400):
+            _ = entity_ids, conversation_id, limit
+            return []
+
+        def search_turns_fulltext(self, *, query_text: str, conversation_id=None, limit: int = 200):
+            _ = query_text, conversation_id, limit
+            return [
+                {
+                    "turn_uid": "conv-2:t9",
+                    "conversation_id": "conv-2",
+                    "turn_id": "t9",
+                    "speaker": "assistant",
+                    "text": "pyodide PR 리뷰 코멘트 모음",
+                    "timestamp": datetime(2026, 2, 9, 10, 3, 0, tzinfo=timezone.utc),
+                    "embedding": self.embedder.embed("pyodide PR 리뷰 코멘트"),
+                    "importance_score": 0.0,
+                    "last_recalled_at": None,
+                    "recall_count": 0,
+                    "lexical_score": 3.2,
+                    "matched_entity_ids": [],
+                    "matched_entities": [],
+                }
+            ]
+
+    store = LexicalOnlyStore()
+    retriever = GraphRetriever(store=store, extractor=HeuristicExtractor(), embedder=HashEmbedder())
+
+    response = retriever.query(QueryRequest(query="pyodide 리뷰 코멘트", top_k=1, hybrid_enabled=True))
+
+    assert response.selected_turns
+    assert response.selected_turns[0].turn_uid == "conv-2:t9"
+    assert response.matched_seed_entities == []
+
+
+def test_lexical_weight_can_change_top_rank() -> None:
+    class LexicalHeavyStore(FakeStore):
+        def search_turns_fulltext(self, *, query_text: str, conversation_id=None, limit: int = 200):
+            rows = super().search_turns_fulltext(query_text=query_text, conversation_id=conversation_id, limit=limit)
+            rows[0]["lexical_score"] = 4.0
+            rows[1]["lexical_score"] = 0.1
+            return rows
+
+    store = LexicalHeavyStore()
+    retriever = GraphRetriever(store=store, extractor=HeuristicExtractor(), embedder=HashEmbedder())
+
+    graph_first = retriever.query(
+        QueryRequest(
+            query="continuous batching이 paged attention과 어떤 관계야?",
+            top_k=1,
+            graph_weight=1.0,
+            embedding_weight=0.0,
+            lexical_weight=0.0,
+            importance_weight=0.0,
+            recency_weight=0.0,
+        )
+    )
+    lexical_first = retriever.query(
+        QueryRequest(
+            query="continuous batching이 paged attention과 어떤 관계야?",
+            top_k=1,
+            graph_weight=0.0,
+            embedding_weight=0.0,
+            lexical_weight=1.0,
+            importance_weight=0.0,
+            recency_weight=0.0,
+        )
+    )
+
+    assert graph_first.selected_turns[0].turn_uid == "conv-1:t4"
+    assert lexical_first.selected_turns[0].turn_uid == "conv-1:t2"
+
+
+def test_rerank_stage_can_reorder_top_candidates() -> None:
+    class RerankStore(FakeStore):
+        def search_entities(self, query_text: str, limit: int = 25):
+            _ = query_text, limit
+            return []
+
+        def fetch_turns_for_entities(self, entity_ids, conversation_id=None, limit: int = 400):
+            _ = entity_ids, conversation_id, limit
+            return []
+
+        def search_turns_fulltext(self, *, query_text: str, conversation_id=None, limit: int = 200):
+            _ = query_text, conversation_id, limit
+            return [
+                {
+                    "turn_uid": "conv-r:t1",
+                    "conversation_id": "conv-r",
+                    "turn_id": "t1",
+                    "speaker": "assistant",
+                    "text": "first candidate text",
+                    "timestamp": datetime(2026, 2, 9, 8, 0, 0, tzinfo=timezone.utc),
+                    "embedding": self.embedder.embed("first candidate text"),
+                    "importance_score": 0.0,
+                    "last_recalled_at": None,
+                    "recall_count": 0,
+                    "lexical_score": 1.0,
+                    "matched_entity_ids": [],
+                    "matched_entities": [],
+                },
+                {
+                    "turn_uid": "conv-r:t2",
+                    "conversation_id": "conv-r",
+                    "turn_id": "t2",
+                    "speaker": "assistant",
+                    "text": "second candidate text",
+                    "timestamp": datetime(2026, 2, 9, 8, 0, 1, tzinfo=timezone.utc),
+                    "embedding": self.embedder.embed("second candidate text"),
+                    "importance_score": 0.0,
+                    "last_recalled_at": None,
+                    "recall_count": 0,
+                    "lexical_score": 1.0,
+                    "matched_entity_ids": [],
+                    "matched_entities": [],
+                },
+            ]
+
+    class FakeReranker:
+        provider = "fake"
+        model_name = "fake-reranker"
+
+        def score(self, *, query: str, documents: list[str]) -> list[float]:
+            _ = query
+            values = {"first candidate text": 0.1, "second candidate text": 1.0}
+            return [values.get(document, 0.0) for document in documents]
+
+        def status(self) -> dict[str, object]:
+            return {
+                "provider": self.provider,
+                "model_name": self.model_name,
+                "loaded": True,
+                "available": True,
+                "last_error": None,
+            }
+
+    store = RerankStore()
+    retriever = GraphRetriever(
+        store=store,
+        extractor=HeuristicExtractor(),
+        embedder=HashEmbedder(),
+        reranker=FakeReranker(),
+    )
+
+    response = retriever.query(
+        QueryRequest(
+            query="candidate text",
+            top_k=1,
+            hybrid_enabled=True,
+            graph_weight=0.0,
+            embedding_weight=0.0,
+            lexical_weight=1.0,
+            importance_weight=0.0,
+            recency_weight=0.0,
+            rerank_enabled=True,
+            rerank_top_n=2,
+        )
+    )
+
+    assert response.selected_turns
+    assert response.selected_turns[0].turn_uid == "conv-r:t2"
 
 
 def test_recency_weight_can_change_top_rank() -> None:

@@ -10,8 +10,13 @@ COPY app ./app
 COPY viewer ./viewer
 COPY data ./data
 
+ARG INSTALL_MODEL_DEPS=false
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e .
+    && if [ "$INSTALL_MODEL_DEPS" = "true" ]; then \
+      pip install --no-cache-dir -e ".[model]"; \
+    else \
+      pip install --no-cache-dir -e .; \
+    fi
 
 EXPOSE 8000
 

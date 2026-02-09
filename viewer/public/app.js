@@ -83,22 +83,69 @@ async function ingestSample() {
 
 async function ingestHistory() {
   if (isBusy()) return;
-  setStatus("History ingest 실행 중... (대화량이 많으면 오래 걸릴 수 있어요)", "info");
+  setStatus("History ingest job 생성 중...", "info");
   pushBusy();
   const payload = {
     source: "both",
     max_files: 500,
   };
   try {
-    const res = await requestJson("/ingest/history", payload, { timeoutMs: 15 * 60 * 1000 });
-    if (!res.ok) return;
-    const data = res.data || {};
-    setStatus(
-      `History ingest 완료: turns=${data.ingested_turns}, entities=${data.extracted_entities}, relations=${data.extracted_relations}. 다음: 1) Query 입력 2) Run Query 3) Graph Seed 입력 후 Load Graph`,
-      "success"
-    );
+    const startRes = await requestJson("/ingest/history/start", payload, { timeoutMs: 30000 });
+    if (!startRes.ok) return;
+    const job = startRes.data || {};
+    const jobId = job.job_id;
+    if (!jobId) {
+      setStatus("History ingest job_id를 받지 못했습니다.", "error");
+      return;
+    }
+    await pollIngestJob(jobId);
   } finally {
     popBusy();
+  }
+}
+
+async function pollIngestJob(jobId) {
+  while (true) {
+    const res = await requestJson(`/ingest/jobs/${encodeURIComponent(jobId)}`, null, {
+      method: "GET",
+      timeoutMs: 30000,
+    });
+    if (!res.ok) {
+      await sleep(1500);
+      continue;
+    }
+    const job = res.data || {};
+    const status = String(job.status || "");
+    const progress = job.progress || {};
+
+    const processed = Number(progress.turns_processed || 0);
+    const total = progress.turns_total === null || progress.turns_total === undefined ? null : Number(progress.turns_total);
+    const pct = total ? ` (${Math.floor((processed / Math.max(1, total)) * 100)}%)` : "";
+
+    if (status === "succeeded") {
+      setStatus(
+        `History ingest 완료: turns=${processed}, entities=${Number(progress.extracted_entities || 0)}, relations=${Number(progress.extracted_relations || 0)}. 다음: 1) Query 입력 2) Run Query 3) Graph Seed 입력 후 Load Graph`,
+        "success"
+      );
+      return;
+    }
+    if (status === "failed") {
+      setStatus(`History ingest 실패: ${job.error || "unknown error"}`, "error");
+      return;
+    }
+    if (status === "cancelled") {
+      setStatus("History ingest 취소됨.", "error");
+      return;
+    }
+
+    const phase = String(progress.phase || status || "running");
+    setStatus(
+      `History ingest ${phase}... turns ${processed}/${total ?? "?"}${pct} | entities ${Number(
+        progress.extracted_entities || 0
+      )} | relations ${Number(progress.extracted_relations || 0)}`,
+      "info"
+    );
+    await sleep(2000);
   }
 }
 
@@ -558,4 +605,8 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

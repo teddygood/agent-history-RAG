@@ -40,6 +40,13 @@ curl -X POST http://localhost:8000/ingest/jsonl \
   -d '{"path":"/workspace/data/samples/conversation.jsonl"}'
 ```
 
+### 2-1) Ingest Codex + Claude history (all conversations)
+```bash
+curl -X POST http://localhost:8000/ingest/history \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"both","codex_history_path":"~/.codex/history.jsonl","claude_projects_root":"~/.claude/projects"}'
+```
+
 ### 3) Query
 ```bash
 curl -X POST http://localhost:8000/query \
@@ -53,6 +60,7 @@ curl -X POST http://localhost:8000/query \
 ## API Summary
 - `POST /ingest/conversation`
 - `POST /ingest/jsonl`
+- `POST /ingest/history`
 - `POST /ingest/rebuild`
 - `POST /query`
 - `GET /entities/{entity_id}`

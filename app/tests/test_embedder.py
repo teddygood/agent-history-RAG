@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import app.services.embedder as embedder_module
-from app.services.embedder import HashEmbedder, create_embedder
+from app.services.embedder import HashEmbedder, _resolve_model_profile, create_embedder
 
 
 def test_hash_embedder_is_deterministic() -> None:
@@ -15,6 +15,15 @@ def test_hash_embedder_is_deterministic() -> None:
     assert a == b
     assert a != c
     assert len(a) == 32
+
+
+def test_hash_embedder_query_and_document_methods() -> None:
+    embedder = HashEmbedder(dim=16)
+    query_vec = embedder.embed_query("연속 배칭")
+    doc_vec = embedder.embed_document("연속 배칭")
+
+    assert len(query_vec) == 16
+    assert query_vec == doc_vec
 
 
 def test_create_embedder_hash_provider() -> None:
@@ -48,3 +57,10 @@ def test_create_embedder_sentence_transformers_raises_without_fallback(monkeypat
 def test_create_embedder_rejects_unknown_provider() -> None:
     with pytest.raises(ValueError, match="Unsupported EMBEDDING_PROVIDER"):
         create_embedder(provider="unknown-provider")
+
+
+def test_resolve_known_model_profile_defaults() -> None:
+    profile = _resolve_model_profile(model_name="nlpai-lab/KURE-v1")
+    assert profile.model_name == "nlpai-lab/KURE-v1"
+    assert profile.query_prefix == "query: "
+    assert profile.document_prefix == "passage: "

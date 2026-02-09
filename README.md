@@ -17,6 +17,7 @@ This project builds a traceable RAG pipeline over conversation logs using an ent
 - Real-time query tuning sliders (max hops, beam width, prune threshold, importance/recency weights)
 - Importance-aware and recall-time-aware ranking (`importance_score`, `last_recalled_at`)
 - Structured reasoning trace in API output
+- Pluggable embedder (`hash` / `sentence-transformers` / `auto`) with hash fallback
 - Minimal D3 graph viewer
 
 ## Quickstart
@@ -32,6 +33,16 @@ If host port `8000` is busy, run:
 API_HOST_PORT=8001 docker compose up --build
 ```
 The API port is bound to `127.0.0.1` (localhost) by default.
+
+If you want model embeddings instead of hash embeddings:
+```bash
+# optional (host install)
+pip install ".[model]"
+
+# set in .env
+EMBEDDING_PROVIDER=sentence-transformers
+EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
 
 ### 2) Ingest sample data
 ```bash
@@ -108,4 +119,6 @@ Dataset JSONL row format:
 
 ## Notes
 - Current extractor is deterministic heuristic logic for repeatability.
+- Embedder provider is selected by env: `EMBEDDING_PROVIDER=hash|sentence-transformers|auto`.
+- If model provider init fails and `EMBEDDING_FALLBACK_TO_HASH=true`, it falls back to hash embedder.
 - You can replace `app/services/extractor.py` with an external LLM extractor while keeping retrieval unchanged.

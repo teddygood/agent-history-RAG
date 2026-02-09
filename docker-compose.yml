@@ -32,6 +32,8 @@ services:
       EMBEDDING_DOCUMENT_PREFIX: ${EMBEDDING_DOCUMENT_PREFIX:-}
       EMBEDDING_FALLBACK_TO_HASH: ${EMBEDDING_FALLBACK_TO_HASH:-true}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-64}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-8}
+      EMBEDDING_CPU_THREADS: ${EMBEDDING_CPU_THREADS:-0}
       CHUNK_SIZE_DEFAULT: ${CHUNK_SIZE_DEFAULT:-2048}
       CHUNK_OVERLAP_DEFAULT: ${CHUNK_OVERLAP_DEFAULT:-256}
       CHUNK_SIZE_STRUCTURED: ${CHUNK_SIZE_STRUCTURED:-1024}
@@ -52,13 +54,19 @@ services:
       RERANKER_WEIGHT: ${RERANKER_WEIGHT:-0.20}
       RERANKER_FALLBACK_TO_BASE: ${RERANKER_FALLBACK_TO_BASE:-true}
       TOP_K_DEFAULT: ${TOP_K_DEFAULT:-5}
+      INGEST_BATCH_SIZE: ${INGEST_BATCH_SIZE:-16}
+      INGEST_SKIP_EXISTING_HISTORY: ${INGEST_SKIP_EXISTING_HISTORY:-true}
     volumes:
       - ./:/workspace
       - ${HOME}/.codex:/host-home/.codex:ro
       - ${HOME}/.claude:/host-home/.claude:ro
+      - hf_cache:/root/.cache/huggingface
+      - torch_cache:/root/.cache/torch
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 volumes:
   neo4j_data:
+  hf_cache:
+  torch_cache:

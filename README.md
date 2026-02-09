@@ -18,7 +18,8 @@ This project builds a traceable RAG pipeline over conversation logs using an ent
 - Real-time query tuning sliders (max hops, beam width, prune threshold, importance/recency weights)
 - Importance-aware and recall-time-aware ranking (`importance_score`, `last_recalled_at`)
 - Structured reasoning trace in API output
-- Pluggable embedder (`hash` / `sentence-transformers` / `auto`) with hash fallback
+- Pluggable embedder (`hash` / `sentence-transformers` / `auto`) with KURE-v1 default profile
+- Adaptive chunking (`default=2048/256`, `structured=1024/128`) with ingest-time override
 - Minimal D3 graph viewer
 
 ## Quickstart
@@ -42,7 +43,8 @@ pip install ".[model]"
 
 # set in .env
 EMBEDDING_PROVIDER=sentence-transformers
-EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_MODEL_PRIMARY=nlpai-lab/KURE-v1
+EMBEDDING_MODEL_CANDIDATES=dragonkue/BGE-m3-ko
 ```
 
 Docker Compose mode:
@@ -54,14 +56,14 @@ INSTALL_MODEL_DEPS=true EMBEDDING_PROVIDER=sentence-transformers docker compose 
 ```bash
 curl -X POST http://localhost:8000/ingest/jsonl \
   -H 'Content-Type: application/json' \
-  -d '{"path":"/workspace/data/samples/conversation.jsonl"}'
+  -d '{"path":"/workspace/data/samples/conversation.jsonl", "chunk_profile":"auto"}'
 ```
 
 ### 2-1) Ingest Codex + Claude history (all conversations)
 ```bash
 curl -X POST http://localhost:8000/ingest/history \
   -H 'Content-Type: application/json' \
-  -d '{"source":"both","codex_history_path":"~/.codex/history.jsonl","claude_projects_root":"~/.claude/projects"}'
+  -d '{"source":"both","codex_history_path":"~/.codex/history.jsonl","claude_projects_root":"~/.claude/projects","chunk_profile":"auto"}'
 ```
 
 When running in Docker Compose, host directories are mounted read-only:
@@ -72,7 +74,7 @@ So this also works in containerized mode:
 ```bash
 curl -X POST http://localhost:8000/ingest/history \
   -H 'Content-Type: application/json' \
-  -d '{"source":"both","codex_history_path":"/host-home/.codex/history.jsonl","claude_projects_root":"/host-home/.claude/projects"}'
+  -d '{"source":"both","codex_history_path":"/host-home/.codex/history.jsonl","claude_projects_root":"/host-home/.claude/projects","chunk_profile":"auto"}'
 ```
 
 ### 3) Query
@@ -91,7 +93,9 @@ Use the sample benchmark set:
 python scripts/eval_queries.py \
   --dataset data/eval/query_turn_relevance.sample.jsonl \
   --api-base http://localhost:8000 \
-  --k 1,3,5
+  --k 1,3,5 \
+  --embed-model nlpai-lab/KURE-v1 \
+  --chunk-profile auto
 ```
 
 Save a detailed JSON report:
@@ -100,6 +104,8 @@ python scripts/eval_queries.py \
   --dataset data/eval/query_turn_relevance.sample.jsonl \
   --api-base http://localhost:8000 \
   --k 1,3,5,10 \
+  --embed-model nlpai-lab/KURE-v1 \
+  --chunk-profile auto \
   --out-json ./artifacts/eval-report.json
 ```
 
@@ -126,5 +132,7 @@ Dataset JSONL row format:
 ## Notes
 - Current extractor is deterministic heuristic logic for repeatability.
 - Embedder provider is selected by env: `EMBEDDING_PROVIDER=hash|sentence-transformers|auto`.
+- Primary model default is `nlpai-lab/KURE-v1`; candidate compare model is `dragonkue/BGE-m3-ko`.
+- Ingest supports `chunk_profile=auto|default|structured`.
 - If model provider init fails and `EMBEDDING_FALLBACK_TO_HASH=true`, it falls back to hash embedder.
 - You can replace `app/services/extractor.py` with an external LLM extractor while keeping retrieval unchanged.

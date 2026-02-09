@@ -47,6 +47,15 @@ class Settings:
     graph_max_hops: int = int(os.getenv("GRAPH_MAX_HOPS", "3"))
     graph_beam_width: int = int(os.getenv("GRAPH_BEAM_WIDTH", "24"))
     graph_prune_threshold: float = float(os.getenv("GRAPH_PRUNE_THRESHOLD", "0.10"))
+    hybrid_enabled: bool = _env_bool("HYBRID_ENABLED", True)
+    hybrid_graph_weight: float = float(os.getenv("HYBRID_GRAPH_WEIGHT", "0.62"))
+    hybrid_embedding_weight: float = float(os.getenv("HYBRID_EMBEDDING_WEIGHT", "0.23"))
+    hybrid_lexical_weight: float = float(os.getenv("HYBRID_LEXICAL_WEIGHT", "0.15"))
+    reranker_enabled: bool = _env_bool("RERANKER_ENABLED", False)
+    reranker_model_primary: str = os.getenv("RERANKER_MODEL_PRIMARY", "BAAI/bge-reranker-v2-m3")
+    reranker_top_n: int = int(os.getenv("RERANKER_TOP_N", "20"))
+    reranker_weight: float = float(os.getenv("RERANKER_WEIGHT", "0.20"))
+    reranker_fallback_to_base: bool = _env_bool("RERANKER_FALLBACK_TO_BASE", True)
     top_k_default: int = int(os.getenv("TOP_K_DEFAULT", "5"))
 
 

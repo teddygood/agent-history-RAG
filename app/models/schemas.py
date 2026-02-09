@@ -55,9 +55,16 @@ class QueryRequest(BaseModel):
     max_hops: int | None = Field(default=None, ge=1, le=6)
     beam_width: int | None = Field(default=None, ge=4, le=200)
     prune_threshold: float | None = Field(default=None, ge=0.01, le=1.0)
+    hybrid_enabled: bool | None = None
+    graph_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    embedding_weight: float | None = Field(default=None, ge=0.0, le=1.0)
+    lexical_weight: float | None = Field(default=None, ge=0.0, le=1.0)
     importance_weight: float | None = Field(default=None, ge=0.0, le=1.0)
     recency_weight: float | None = Field(default=None, ge=0.0, le=1.0)
     recall_half_life_hours: int | None = Field(default=None, ge=1, le=720)
+    rerank_enabled: bool | None = None
+    rerank_model: str | None = None
+    rerank_top_n: int | None = Field(default=None, ge=1, le=200)
 
 
 class TracePathStep(BaseModel):
@@ -94,7 +101,7 @@ class QueryResponse(BaseModel):
     matched_seed_entities: list[str] = Field(default_factory=list)
     selected_turns: list[TurnResult] = Field(default_factory=list)
     pruned_paths: int
-    applied_params: dict[str, float | int] = Field(default_factory=dict)
+    applied_params: dict[str, float | int | bool | str] = Field(default_factory=dict)
 
 
 class EntityOut(BaseModel):

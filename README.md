@@ -44,6 +44,11 @@ EMBEDDING_PROVIDER=sentence-transformers
 EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ```
 
+Docker Compose mode:
+```bash
+INSTALL_MODEL_DEPS=true EMBEDDING_PROVIDER=sentence-transformers docker compose up --build
+```
+
 ### 2) Ingest sample data
 ```bash
 curl -X POST http://localhost:8000/ingest/jsonl \

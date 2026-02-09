@@ -21,6 +21,7 @@ This project builds a traceable RAG pipeline over conversation logs using an ent
 
 ### 1) Start services
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 

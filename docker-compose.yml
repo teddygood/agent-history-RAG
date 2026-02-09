@@ -19,8 +19,6 @@ services:
     container_name: graph-rag-api
     depends_on:
       - neo4j
-    env_file:
-      - .env
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8000

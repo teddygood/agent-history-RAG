@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Graph Conversation RAG Viewer</title>
+    <link rel="stylesheet" href="/viewer/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1>Graph-Centric RAG Explorer</h1>
+        <p>Traceable turn retrieval over an entity relation graph</p>
+      </header>
+
+      <section class="controls">
+        <div class="row">
+          <label for="query">Query</label>
+          <input id="query" value="continuous batching과 paged attention 관계 설명해줘" />
+        </div>
+        <div class="row row-grid">
+          <div>
+            <label for="topK">Top-K</label>
+            <input id="topK" type="number" min="1" max="20" value="5" />
+          </div>
+          <div>
+            <label for="seed">Graph Seed</label>
+            <input id="seed" value="paged attention" />
+          </div>
+        </div>
+        <div class="actions">
+          <button id="runQuery">Run Query</button>
+          <button id="loadGraph">Load Graph</button>
+          <button id="ingestSample">Ingest Sample</button>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel">
+          <h2>Top Turns</h2>
+          <ul id="turnList"></ul>
+        </article>
+
+        <article class="panel">
+          <h2>Graph</h2>
+          <div id="graphCanvas"></div>
+        </article>
+      </section>
+    </div>
+
+    <script type="module" src="/viewer/app.js"></script>
+  </body>
+</html>

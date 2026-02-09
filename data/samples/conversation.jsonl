@@ -1,0 +1,5 @@
+{"conversation_id":"conv-1","turn_id":"t1","speaker":"user","text":"continuous batching이 뭐야? inference throughput을 높인다고 들었어.","timestamp":"2026-02-09T09:00:00Z"}
+{"conversation_id":"conv-1","turn_id":"t2","speaker":"assistant","text":"continuous batching은 요청을 동적으로 묶어 GPU utilization을 높이는 스케줄링 전략이야.","timestamp":"2026-02-09T09:00:10Z"}
+{"conversation_id":"conv-1","turn_id":"t3","speaker":"user","text":"paged attention이랑은 어떤 관계야?","timestamp":"2026-02-09T09:00:25Z"}
+{"conversation_id":"conv-1","turn_id":"t4","speaker":"assistant","text":"paged attention은 KV-cache를 페이지 단위로 관리해서 메모리 낭비를 줄이고, continuous batching과 함께 쓰면 효율이 좋아.","timestamp":"2026-02-09T09:00:38Z"}
+{"conversation_id":"conv-1","turn_id":"t5","speaker":"assistant","text":"vector RAG는 임베딩 중심 검색이고, graph-centric RAG는 엔티티 관계를 따라가며 근거를 보여주기 좋다.","timestamp":"2026-02-09T09:01:02Z"}

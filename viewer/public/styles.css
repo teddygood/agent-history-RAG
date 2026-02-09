@@ -1,0 +1,185 @@
+:root {
+  --bg: #f3efe6;
+  --paper: #fffdf8;
+  --ink: #1f2d2f;
+  --accent: #0f766e;
+  --muted: #6b7280;
+  --edge: #c7d2d9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at 20% 0%, #d7ece8, var(--bg));
+  color: var(--ink);
+}
+
+.app-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  letter-spacing: 0.4px;
+}
+
+.app-header p {
+  margin-top: 0.4rem;
+  color: var(--muted);
+}
+
+.controls {
+  background: var(--paper);
+  border: 1px solid #dce5e6;
+  border-radius: 12px;
+  padding: 0.9rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input {
+  width: 100%;
+  border: 1px solid #c3d2d5;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  padding: 0.55rem 0.6rem;
+  background: white;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+button {
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  padding: 0.52rem 0.72rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover {
+  filter: brightness(0.95);
+}
+
+.content-grid {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 0.9rem;
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid #dce5e6;
+  border-radius: 12px;
+  padding: 0.9rem;
+  min-height: 520px;
+}
+
+.panel h2 {
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+}
+
+#turnList {
+  padding-left: 0;
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.turn-item {
+  border: 1px solid #d9e4e7;
+  border-radius: 10px;
+  padding: 0.6rem;
+}
+
+.turn-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.turn-text {
+  font-size: 0.93rem;
+  line-height: 1.35;
+  margin-bottom: 0.35rem;
+}
+
+.turn-reason {
+  font-size: 0.8rem;
+  color: #115e59;
+}
+
+#graphCanvas {
+  width: 100%;
+  min-height: 470px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfffd 0%, #f4faf8 100%);
+  overflow: hidden;
+}
+
+svg {
+  width: 100%;
+  height: 470px;
+}
+
+.node {
+  stroke: #245f66;
+  stroke-width: 1.2px;
+}
+
+.link {
+  stroke: #9bb0b6;
+  stroke-opacity: 0.8;
+}
+
+.node-label {
+  font-size: 11px;
+  fill: #334155;
+  pointer-events: none;
+}
+
+@media (max-width: 980px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    min-height: 420px;
+  }
+
+  svg {
+    height: 390px;
+  }
+}

@@ -6,6 +6,12 @@ const beamWidthInput = document.getElementById("beamWidth");
 const pruneThresholdInput = document.getElementById("pruneThreshold");
 const importanceWeightInput = document.getElementById("importanceWeight");
 const recencyWeightInput = document.getElementById("recencyWeight");
+const graphWeightInput = document.getElementById("graphWeight");
+const embeddingWeightInput = document.getElementById("embeddingWeight");
+const lexicalWeightInput = document.getElementById("lexicalWeight");
+const rerankTopNInput = document.getElementById("rerankTopN");
+const hybridEnabledInput = document.getElementById("hybridEnabled");
+const rerankEnabledInput = document.getElementById("rerankEnabled");
 const graphLimitInput = document.getElementById("graphLimit");
 const graphLinkDistanceInput = document.getElementById("graphLinkDistance");
 const graphRepulsionInput = document.getElementById("graphRepulsion");
@@ -17,6 +23,10 @@ const beamWidthVal = document.getElementById("beamWidthVal");
 const pruneThresholdVal = document.getElementById("pruneThresholdVal");
 const importanceWeightVal = document.getElementById("importanceWeightVal");
 const recencyWeightVal = document.getElementById("recencyWeightVal");
+const graphWeightVal = document.getElementById("graphWeightVal");
+const embeddingWeightVal = document.getElementById("embeddingWeightVal");
+const lexicalWeightVal = document.getElementById("lexicalWeightVal");
+const rerankTopNVal = document.getElementById("rerankTopNVal");
 const graphLimitVal = document.getElementById("graphLimitVal");
 const graphLinkDistanceVal = document.getElementById("graphLinkDistanceVal");
 const graphRepulsionVal = document.getElementById("graphRepulsionVal");
@@ -44,6 +54,10 @@ bindSlider(beamWidthInput, beamWidthVal, (v) => `${Number(v)}`);
 bindSlider(pruneThresholdInput, pruneThresholdVal, (v) => Number(v).toFixed(2));
 bindSlider(importanceWeightInput, importanceWeightVal, (v) => Number(v).toFixed(2));
 bindSlider(recencyWeightInput, recencyWeightVal, (v) => Number(v).toFixed(2));
+bindSlider(graphWeightInput, graphWeightVal, (v) => Number(v).toFixed(2));
+bindSlider(embeddingWeightInput, embeddingWeightVal, (v) => Number(v).toFixed(2));
+bindSlider(lexicalWeightInput, lexicalWeightVal, (v) => Number(v).toFixed(2));
+bindSlider(rerankTopNInput, rerankTopNVal, (v) => `${Number(v)}`);
 bindSlider(graphLimitInput, graphLimitVal, (v) => `${Number(v)}`);
 bindSlider(graphLinkDistanceInput, graphLinkDistanceVal, (v) => `${Number(v)}`, rerenderGraphIfLoaded);
 bindSlider(graphRepulsionInput, graphRepulsionVal, (v) => `${Number(v)}`, rerenderGraphIfLoaded);
@@ -95,9 +109,15 @@ async function runQuery() {
     max_hops: Number(maxHopsInput.value),
     beam_width: Number(beamWidthInput.value),
     prune_threshold: Number(pruneThresholdInput.value),
+    hybrid_enabled: hybridEnabledInput.checked,
+    graph_weight: Number(graphWeightInput.value),
+    embedding_weight: Number(embeddingWeightInput.value),
+    lexical_weight: Number(lexicalWeightInput.value),
     importance_weight: Number(importanceWeightInput.value),
     recency_weight: Number(recencyWeightInput.value),
     recall_half_life_hours: 72,
+    rerank_enabled: rerankEnabledInput.checked,
+    rerank_top_n: Number(rerankTopNInput.value),
   };
   const res = await fetch("/query", {
     method: "POST",
@@ -127,8 +147,12 @@ function renderAppliedParams(params) {
     `hops=${params.max_hops}`,
     `beam=${params.beam_width}`,
     `prune=${formatNumber(params.prune_threshold)}`,
+    `hybrid=${Boolean(params.hybrid_enabled)}`,
+    `w(g/e/l)=${formatNumber(params.graph_weight)}/${formatNumber(params.embedding_weight)}/${formatNumber(params.lexical_weight)}`,
     `importance_w=${formatNumber(params.importance_weight)}`,
     `recency_w=${formatNumber(params.recency_weight)}`,
+    `rerank=${Boolean(params.rerank_enabled)} top_n=${Number(params.rerank_top_n || 0)}`,
+    `reranker_ready=${Boolean(params.reranker_available)}`,
     `top_k=${params.top_k}`,
   ].join(" | ");
   appliedParamsEl.textContent = text;
@@ -152,7 +176,11 @@ function renderTurns(turns) {
 
     const breakdown = turn.score_breakdown || {};
     const breakdownText = [
-      `base ${formatNumber(breakdown.base_score)}`,
+      `fusion ${formatNumber(breakdown.fusion_score)}`,
+      `graph ${formatNumber(breakdown.graph_signal)}`,
+      `emb ${formatNumber(breakdown.embedding_signal)}`,
+      `lex ${formatNumber(breakdown.lexical_signal)}`,
+      `rerank ${formatNumber(breakdown.rerank_component)}`,
       `+ imp ${formatNumber(breakdown.importance_component)}`,
       `+ rec ${formatNumber(breakdown.recency_component)}`,
     ].join(" ");

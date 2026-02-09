@@ -51,6 +51,32 @@
             <label for="recencyWeight">Recency Weight <span id="recencyWeightVal">0.12</span></label>
             <input id="recencyWeight" type="range" min="0.00" max="1.00" step="0.01" value="0.12" />
           </div>
+          <div class="slider-item">
+            <label for="graphWeight">Graph Weight <span id="graphWeightVal">0.62</span></label>
+            <input id="graphWeight" type="range" min="0.00" max="1.00" step="0.01" value="0.62" />
+          </div>
+          <div class="slider-item">
+            <label for="embeddingWeight">Embedding Weight <span id="embeddingWeightVal">0.23</span></label>
+            <input id="embeddingWeight" type="range" min="0.00" max="1.00" step="0.01" value="0.23" />
+          </div>
+          <div class="slider-item">
+            <label for="lexicalWeight">Lexical Weight <span id="lexicalWeightVal">0.15</span></label>
+            <input id="lexicalWeight" type="range" min="0.00" max="1.00" step="0.01" value="0.15" />
+          </div>
+          <div class="slider-item">
+            <label for="rerankTopN">Rerank Top-N <span id="rerankTopNVal">20</span></label>
+            <input id="rerankTopN" type="range" min="1" max="100" step="1" value="20" />
+          </div>
+        </div>
+        <div class="row row-grid toggles-row">
+          <label class="toggle-control" for="hybridEnabled">
+            <input id="hybridEnabled" type="checkbox" checked />
+            <span>Hybrid Enabled</span>
+          </label>
+          <label class="toggle-control" for="rerankEnabled">
+            <input id="rerankEnabled" type="checkbox" />
+            <span>Rerank Enabled</span>
+          </label>
         </div>
         <div class="slider-grid graph-slider-grid">
           <div class="slider-item">

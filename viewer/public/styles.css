@@ -82,6 +82,27 @@ body {
   gap: 0.8rem;
 }
 
+.toggles-row {
+  margin-bottom: 0.8rem;
+}
+
+.toggle-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #d1dde0;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  background: #f8fbfb;
+  color: #334155;
+}
+
+.toggle-control input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
 .slider-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

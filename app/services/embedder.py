@@ -177,21 +177,66 @@ class SentenceTransformerEmbedder(_BaseEmbedder):
         self.model_name = profile.model_name
         self.query_prefix = profile.query_prefix
         self.document_prefix = profile.document_prefix
+        self.batch_size = max(1, int(settings.embedding_batch_size))
+
+        self._configure_cpu_threads()
         self.model = SentenceTransformer(self.model_name)
         self.dim = int(self.model.get_sentence_embedding_dimension() or settings.embedding_dim)
 
+    def _configure_cpu_threads(self) -> None:
+        """
+        sentence-transformers defaults can be conservative inside containers.
+        Tune torch thread count for CPU-only execution.
+        """
+        try:
+            import os
+
+            import torch  # type: ignore
+
+            if torch.cuda.is_available():
+                return
+
+            configured = int(getattr(settings, "embedding_cpu_threads", 0) or 0)
+            target = configured if configured > 0 else int(os.cpu_count() or 2)
+            target = max(1, target)
+
+            # num_threads can be changed at runtime; interop threads may be locked after first use.
+            torch.set_num_threads(target)
+            try:
+                torch.set_num_interop_threads(min(4, target))
+            except Exception:
+                pass
+        except Exception:
+            # Best-effort tuning only.
+            return
+
     def embed(self, text: str) -> list[float]:
-        encoded = self.model.encode([text], normalize_embeddings=True, show_progress_bar=False)
+        encoded = self.model.encode(
+            [text],
+            normalize_embeddings=True,
+            show_progress_bar=False,
+            batch_size=self.batch_size,
+        )
         return self._coerce_matrix(encoded)[0]
 
     def embed_queries(self, texts: list[str]) -> list[list[float]]:
         prepared = [f"{self.query_prefix}{text}" if self.query_prefix else text for text in texts]
-        encoded = self.model.encode(prepared, normalize_embeddings=True, show_progress_bar=False)
+        encoded = self.model.encode(
+            prepared,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+            batch_size=self.batch_size,
+        )
         return self._coerce_matrix(encoded)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         prepared = [f"{self.document_prefix}{text}" if self.document_prefix else text for text in texts]
-        encoded = self.model.encode(prepared, normalize_embeddings=True, show_progress_bar=False)
+        encoded = self.model.encode(
+            prepared,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+            batch_size=self.batch_size,
+        )
         return self._coerce_matrix(encoded)
 
     def embed_query(self, text: str) -> list[float]:

@@ -25,6 +25,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
+If host port `8000` is busy, run:
+```bash
+API_HOST_PORT=8001 docker compose up --build
+```
+
 ### 2) Ingest sample data
 ```bash
 curl -X POST http://localhost:8000/ingest/jsonl \

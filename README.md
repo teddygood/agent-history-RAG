@@ -15,7 +15,9 @@ This project builds a traceable RAG pipeline over conversation logs using an ent
 - Korean technical term normalization (e.g. 연속 배칭 -> continuous batching)
 - Entity-to-entity semantic relation graph with evidence turn IDs
 - Query-time entity seeding + graph traversal + Top-K turn retrieval
-- Real-time query tuning sliders (max hops, beam width, prune threshold, importance/recency weights)
+- Hybrid retrieval (`graph + embedding + lexical(fulltext)`) with weighted score fusion
+- Optional cross-encoder reranker stage for Top-N candidate refinement
+- Real-time query tuning sliders (hops/beam/prune, graph-embedding-lexical weights, rerank Top-N, importance/recency)
 - Importance-aware and recall-time-aware ranking (`importance_score`, `last_recalled_at`)
 - Structured reasoning trace in API output
 - Pluggable embedder (`hash` / `sentence-transformers` / `auto`) with KURE-v1 default profile
@@ -81,7 +83,7 @@ curl -X POST http://localhost:8000/ingest/history \
 ```bash
 curl -X POST http://localhost:8000/query \
   -H 'Content-Type: application/json' \
-  -d '{"query":"continuous batching이 paged attention과 어떤 관계야?", "top_k":5, "max_hops":3, "beam_width":24, "prune_threshold":0.1, "importance_weight":0.18, "recency_weight":0.12, "recall_half_life_hours":72}'
+  -d '{"query":"continuous batching이 paged attention과 어떤 관계야?", "top_k":5, "max_hops":3, "beam_width":24, "prune_threshold":0.1, "hybrid_enabled":true, "graph_weight":0.62, "embedding_weight":0.23, "lexical_weight":0.15, "rerank_enabled":false, "rerank_top_n":20, "importance_weight":0.18, "recency_weight":0.12, "recall_half_life_hours":72}'
 ```
 
 ### 4) Open viewer
@@ -134,5 +136,7 @@ Dataset JSONL row format:
 - Embedder provider is selected by env: `EMBEDDING_PROVIDER=hash|sentence-transformers|auto`.
 - Primary model default is `nlpai-lab/KURE-v1`; candidate compare model is `dragonkue/BGE-m3-ko`.
 - Ingest supports `chunk_profile=auto|default|structured`.
+- Hybrid defaults can be changed via env: `HYBRID_*`, reranker defaults via `RERANKER_*`.
 - If model provider init fails and `EMBEDDING_FALLBACK_TO_HASH=true`, it falls back to hash embedder.
+- If reranker init/inference fails and `RERANKER_FALLBACK_TO_BASE=true`, base ranking is kept.
 - You can replace `app/services/extractor.py` with an external LLM extractor while keeping retrieval unchanged.

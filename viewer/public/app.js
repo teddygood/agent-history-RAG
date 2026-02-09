@@ -228,6 +228,14 @@ async function loadGraph() {
     if (!res.ok) return;
     const graph = res.data || {};
     lastGraphData = graph;
+    const d3Ready = await ensureD3Loaded();
+    if (!d3Ready) {
+      renderGraphPlaceholder(
+        `그래프 렌더러(d3) 로딩 실패: 외부 CDN 접근이 막혀 있을 수 있어요.\n` +
+          `Top Turns 리스트는 정상 사용 가능하고, 그래프는 지금은 비활성화됩니다.`
+      );
+      return;
+    }
     renderGraph(graph.nodes || [], graph.edges || []);
     setStatus(`Graph 로드 완료: nodes=${graph.nodes?.length || 0}, edges=${graph.edges?.length || 0}`, "info");
   } finally {
@@ -373,6 +381,18 @@ function renderGraph(nodes, edges) {
   }
 }
 
+function renderGraphPlaceholder(message) {
+  const container = document.getElementById("graphCanvas");
+  container.innerHTML = "";
+  const box = document.createElement("div");
+  box.style.padding = "0.8rem";
+  box.style.color = "#475569";
+  box.style.fontSize = "0.9rem";
+  box.style.whiteSpace = "pre-wrap";
+  box.textContent = message;
+  container.appendChild(box);
+}
+
 function bindSlider(input, output, formatter, onChange = null) {
   const refresh = () => {
     output.textContent = formatter(input.value);
@@ -457,6 +477,66 @@ async function requestJson(url, payload, options = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function ensureD3Loaded() {
+  if (window.d3) return true;
+
+  const candidates = [
+    "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js",
+    "https://unpkg.com/d3@7/dist/d3.min.js",
+  ];
+
+  for (const src of candidates) {
+    try {
+      setStatus("그래프 렌더러(d3) 로딩 중...", "info");
+      await loadScript(src, 15000);
+      if (window.d3) return true;
+    } catch (_) {
+      // try next
+    }
+  }
+
+  setStatus("그래프 렌더러(d3) 로딩 실패. 외부 네트워크 접근을 확인하세요.", "error");
+  return false;
+}
+
+function loadScript(src, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const existing = Array.from(document.getElementsByTagName("script")).find((s) => s.src === src);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(true), { once: true });
+      existing.addEventListener("error", () => reject(new Error("script load failed")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    const timer = setTimeout(() => {
+      script.remove();
+      reject(new Error("script load timeout"));
+    }, timeoutMs);
+
+    script.addEventListener(
+      "load",
+      () => {
+        clearTimeout(timer);
+        resolve(true);
+      },
+      { once: true }
+    );
+    script.addEventListener(
+      "error",
+      () => {
+        clearTimeout(timer);
+        reject(new Error("script load failed"));
+      },
+      { once: true }
+    );
+
+    document.head.appendChild(script);
+  });
 }
 
 function formatDateTime(value) {

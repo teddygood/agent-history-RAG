@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter
+import math
 from typing import Iterable
 
 from app.models.schemas import IngestStats, TurnInput
 from app.services.embedder import Embedder, HashEmbedder
+from app.services.chunker import ChunkProfileName, TextChunker
 from app.services.extractor import HeuristicExtractor
 from app.services.importance import score_turn_importance
 from app.services.neo4j_store import Neo4jStore
@@ -17,19 +19,26 @@ class IngestionService:
         store: Neo4jStore,
         extractor: HeuristicExtractor | None = None,
         embedder: Embedder | None = None,
+        chunker: TextChunker | None = None,
     ) -> None:
         self.store = store
         self.extractor = extractor or HeuristicExtractor()
         self.embedder = embedder or HashEmbedder()
+        self.chunker = chunker or TextChunker()
 
-    def ingest_turns(self, turns: Iterable[TurnInput]) -> IngestStats:
+    def ingest_turns(self, turns: Iterable[TurnInput], *, chunk_profile: ChunkProfileName = "auto") -> IngestStats:
         stats = IngestStats()
         relation_counter: Counter[str] = Counter()
+        chunk_profile_counter: Counter[str] = Counter()
+        total_chunks = 0
+        max_chunks = 0
 
         for turn in turns:
             turn_uid = f"{turn.conversation_id}:{turn.turn_id}"
-            turn_embedding = self.embedder.embed(turn.text)
+            chunk_plan = self.chunker.plan(turn.text, profile=chunk_profile)
+            turn_embedding = self._embed_chunks(chunk_plan.chunks)
             importance_score = score_turn_importance(turn.text)
+            chunk_count = len(chunk_plan.chunks)
             self.store.upsert_turn(
                 turn_uid=turn_uid,
                 conversation_id=turn.conversation_id,
@@ -39,8 +48,15 @@ class IngestionService:
                 timestamp=turn.timestamp,
                 embedding=turn_embedding,
                 importance_score=importance_score,
+                chunk_profile=chunk_plan.profile_name,
+                chunk_count=chunk_count,
+                chunk_size=chunk_plan.chunk_size,
+                chunk_overlap=chunk_plan.chunk_overlap,
             )
             stats.turns += 1
+            chunk_profile_counter[chunk_plan.profile_name] += 1
+            total_chunks += chunk_count
+            max_chunks = max(max_chunks, chunk_count)
 
             extracted_entities = self.extractor.extract_entities(turn.text)
             canonical_to_entity_id: dict[str, str] = {}
@@ -61,7 +77,7 @@ class IngestionService:
                     alias=entity.surface,
                     entity_type=entity.entity_type,
                     description=entity.description,
-                    embedding=self.embedder.embed(canonical_name),
+                    embedding=self.embedder.embed_document(canonical_name),
                 )
                 self.store.link_turn_entity(turn_uid=turn_uid, entity_id=entity_id)
                 stats.entities += 1
@@ -92,4 +108,44 @@ class IngestionService:
                 relation_counter[relation.relation_type] += 1
 
         stats.debug["relation_distribution"] = dict(relation_counter)
+        stats.debug["chunk_profile_distribution"] = dict(chunk_profile_counter)
+        stats.debug["avg_chunks_per_turn"] = round(total_chunks / max(1, stats.turns), 3)
+        stats.debug["max_chunks_per_turn"] = max_chunks
+        stats.debug["chunk_profile"] = chunk_profile
         return stats
+
+    def get_chunking_settings(self) -> dict[str, int | float]:
+        return {
+            "chunk_size_default": self.chunker.default_size,
+            "chunk_overlap_default": self.chunker.default_overlap,
+            "chunk_size_structured": self.chunker.structured_size,
+            "chunk_overlap_structured": self.chunker.structured_overlap,
+            "chunk_size_max": self.chunker.max_chunk_size,
+            "chunk_structure_min_lines": self.chunker.structure_min_lines,
+            "chunk_structure_heading_ratio": self.chunker.structure_heading_ratio,
+        }
+
+    def _embed_chunks(self, chunks: tuple[str, ...]) -> list[float]:
+        vectors = [self.embedder.embed_document(chunk) for chunk in chunks if chunk]
+        if not vectors:
+            return self.embedder.embed_document("")
+        if len(vectors) == 1:
+            return vectors[0]
+
+        dim = len(vectors[0])
+        accum = [0.0] * dim
+        count = 0
+        for vec in vectors:
+            if len(vec) != dim:
+                continue
+            count += 1
+            for idx, value in enumerate(vec):
+                accum[idx] += value
+        if count <= 0:
+            return vectors[0]
+
+        averaged = [value / count for value in accum]
+        norm = math.sqrt(sum(value * value for value in averaged))
+        if norm <= 1e-9:
+            return averaged
+        return [value / norm for value in averaged]

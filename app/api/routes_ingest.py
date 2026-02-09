@@ -41,7 +41,7 @@ def ingest_conversation(
         else:
             turns.append(turn)
 
-    stats = runtime.ingestion.ingest_turns(turns)
+    stats = runtime.ingestion.ingest_turns(turns, chunk_profile=request.chunk_profile)
     conversation_id = request.conversation_id or turns[0].conversation_id
 
     return IngestResponse(
@@ -72,7 +72,7 @@ def rebuild_conversation(
         for row in rows
     ]
 
-    stats = runtime.ingestion.ingest_turns(turns)
+    stats = runtime.ingestion.ingest_turns(turns, chunk_profile=request.chunk_profile)
     return IngestResponse(
         conversation_id=request.conversation_id,
         ingested_turns=stats.turns,
@@ -111,7 +111,7 @@ def ingest_jsonl(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    stats = runtime.ingestion.ingest_turns(turns)
+    stats = runtime.ingestion.ingest_turns(turns, chunk_profile=request.chunk_profile)
     conversation_id = turns[0].conversation_id if turns else "unknown"
 
     return IngestResponse(
@@ -136,7 +136,7 @@ def ingest_history(
     if not turns:
         raise HTTPException(status_code=404, detail="no history turns found from given paths")
 
-    stats = runtime.ingestion.ingest_turns(turns)
+    stats = runtime.ingestion.ingest_turns(turns, chunk_profile=request.chunk_profile)
     return IngestResponse(
         conversation_id=f"{request.source}:bulk-import",
         ingested_turns=stats.turns,

@@ -157,11 +157,13 @@ function renderTurns(turns) {
       `+ rec ${formatNumber(breakdown.recency_component)}`,
     ].join(" ");
     const recalled = turn.last_recalled_at ? `last recall ${formatDateTime(turn.last_recalled_at)}` : "last recall -";
+    const chunkMeta = `chunks ${Number(turn.chunk_count || 1)} (${turn.chunk_profile || "default"})`;
 
     li.innerHTML = `
       <div class="turn-meta">${escapeHtml(turn.conversation_id)} / ${escapeHtml(turn.turn_id)} / score ${Number(turn.score || 0).toFixed(3)}</div>
       <div class="turn-text">${escapeHtml(turn.text)}</div>
       <div class="turn-stats">importance ${formatNumber(turn.importance_score)} | recency ${formatNumber(turn.recency_factor)} | ${escapeHtml(recalled)}</div>
+      <div class="turn-stats">${escapeHtml(chunkMeta)}</div>
       <div class="turn-stats">${escapeHtml(breakdownText)}</div>
       <div class="turn-reason">${escapeHtml(reasons || "direct entity match")}</div>
     `;

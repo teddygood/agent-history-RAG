@@ -39,6 +39,10 @@ class Neo4jStore:
         timestamp: datetime,
         embedding: list[float],
         importance_score: float = 0.0,
+        chunk_profile: str = "default",
+        chunk_count: int = 1,
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
     ) -> None:
         query = """
         MERGE (t:Turn {turn_uid: $turn_uid})
@@ -49,6 +53,10 @@ class Neo4jStore:
             t.timestamp = datetime($timestamp),
             t.embedding = $embedding,
             t.importance_score = $importance_score,
+            t.chunk_profile = $chunk_profile,
+            t.chunk_count = $chunk_count,
+            t.chunk_size = $chunk_size,
+            t.chunk_overlap = $chunk_overlap,
             t.recall_count = coalesce(t.recall_count, 0),
             t.updated_at = datetime()
         """
@@ -61,6 +69,10 @@ class Neo4jStore:
             "timestamp": timestamp.isoformat(),
             "embedding": embedding,
             "importance_score": importance_score,
+            "chunk_profile": chunk_profile,
+            "chunk_count": chunk_count,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
         }
         with self.driver.session() as session:
             session.run(query, params)
@@ -205,6 +217,10 @@ class Neo4jStore:
                t.timestamp AS timestamp,
                coalesce(t.embedding, []) AS embedding,
                coalesce(t.importance_score, 0.0) AS importance_score,
+               coalesce(t.chunk_profile, 'default') AS chunk_profile,
+               coalesce(t.chunk_count, 1) AS chunk_count,
+               coalesce(t.chunk_size, 0) AS chunk_size,
+               coalesce(t.chunk_overlap, 0) AS chunk_overlap,
                t.last_recalled_at AS last_recalled_at,
                coalesce(t.recall_count, 0) AS recall_count,
                collect(DISTINCT e.entity_id) AS matched_entity_ids,

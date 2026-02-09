@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+ChunkProfileLiteral = Literal["auto", "default", "structured"]
+
 
 class TurnInput(BaseModel):
     conversation_id: str = Field(..., min_length=1)
@@ -17,11 +19,13 @@ class TurnInput(BaseModel):
 
 class ConversationIngestRequest(BaseModel):
     conversation_id: str | None = None
+    chunk_profile: ChunkProfileLiteral = "auto"
     turns: list[TurnInput] = Field(default_factory=list)
 
 
 class JSONLIngestRequest(BaseModel):
     path: str
+    chunk_profile: ChunkProfileLiteral = "auto"
 
 
 class HistoryIngestRequest(BaseModel):
@@ -29,10 +33,12 @@ class HistoryIngestRequest(BaseModel):
     codex_history_path: str = "~/.codex/history.jsonl"
     claude_projects_root: str = "~/.claude/projects"
     max_files: int | None = Field(default=None, ge=1, le=10000)
+    chunk_profile: ChunkProfileLiteral = "auto"
 
 
 class RebuildConversationRequest(BaseModel):
     conversation_id: str = Field(..., min_length=1)
+    chunk_profile: ChunkProfileLiteral = "auto"
 
 
 class IngestResponse(BaseModel):
@@ -77,6 +83,8 @@ class TurnResult(BaseModel):
     evidence_turn_ids: list[str] = Field(default_factory=list)
     importance_score: float = 0.0
     recency_factor: float = 1.0
+    chunk_profile: str | None = None
+    chunk_count: int = 1
     last_recalled_at: datetime | None = None
 
 

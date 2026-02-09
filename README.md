@@ -68,6 +68,29 @@ curl -X POST http://localhost:8000/query \
 ### 4) Open viewer
 - `http://localhost:8000/viewer`
 
+### 5) Run retrieval benchmark (Recall@K / MRR / nDCG)
+Use the sample benchmark set:
+```bash
+python scripts/eval_queries.py \
+  --dataset data/eval/query_turn_relevance.sample.jsonl \
+  --api-base http://localhost:8000 \
+  --k 1,3,5
+```
+
+Save a detailed JSON report:
+```bash
+python scripts/eval_queries.py \
+  --dataset data/eval/query_turn_relevance.sample.jsonl \
+  --api-base http://localhost:8000 \
+  --k 1,3,5,10 \
+  --out-json ./artifacts/eval-report.json
+```
+
+Dataset JSONL row format:
+```json
+{"query":"continuous batching과 paged attention 관계","conversation_id":"conv-1","relevant_turn_uids":["conv-1:t4"]}
+```
+
 ## API Summary
 - `POST /ingest/conversation`
 - `POST /ingest/jsonl`

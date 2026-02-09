@@ -78,6 +78,39 @@ class Neo4jStore:
         with self.driver.session() as session:
             session.run(query, params)
 
+    def upsert_turns_batch(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+
+        query = """
+        UNWIND $rows AS row
+        MERGE (t:Turn {turn_uid: row.turn_uid})
+        SET t.conversation_id = row.conversation_id,
+            t.turn_id = row.turn_id,
+            t.speaker = row.speaker,
+            t.text = row.text,
+            t.timestamp = datetime(row.timestamp),
+            t.embedding = row.embedding,
+            t.importance_score = row.importance_score,
+            t.chunk_profile = row.chunk_profile,
+            t.chunk_count = row.chunk_count,
+            t.chunk_size = row.chunk_size,
+            t.chunk_overlap = row.chunk_overlap,
+            t.recall_count = coalesce(t.recall_count, 0),
+            t.updated_at = datetime()
+        """
+
+        payload: list[dict[str, Any]] = []
+        for row in rows:
+            copied = dict(row)
+            timestamp = copied.get("timestamp")
+            if hasattr(timestamp, "isoformat"):
+                copied["timestamp"] = timestamp.isoformat()
+            payload.append(copied)
+
+        with self.driver.session() as session:
+            session.run(query, {"rows": payload})
+
     def upsert_entity(
         self,
         *,
@@ -117,6 +150,32 @@ class Neo4jStore:
         with self.driver.session() as session:
             session.run(query, params)
 
+    def upsert_entities_batch(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+
+        query = """
+        UNWIND $rows AS row
+        MERGE (e:Entity {entity_id: row.entity_id})
+        ON CREATE SET e.canonical_name = row.canonical_name,
+                      e.entity_type = row.entity_type,
+                      e.description = row.description,
+                      e.embedding = row.embedding,
+                      e.aliases = row.aliases,
+                      e.created_at = datetime()
+        ON MATCH SET e.entity_type = coalesce(e.entity_type, row.entity_type),
+                     e.description = CASE WHEN e.description = '' THEN row.description ELSE e.description END,
+                     e.aliases = reduce(
+                        acc = coalesce(e.aliases, []),
+                        alias IN coalesce(row.aliases, []) |
+                        CASE WHEN alias IN acc THEN acc ELSE acc + alias END
+                     ),
+                     e.updated_at = datetime()
+        """
+
+        with self.driver.session() as session:
+            session.run(query, {"rows": rows})
+
     def link_turn_entity(self, *, turn_uid: str, entity_id: str) -> None:
         query = """
         MATCH (t:Turn {turn_uid: $turn_uid})
@@ -126,6 +185,21 @@ class Neo4jStore:
         """
         with self.driver.session() as session:
             session.run(query, {"turn_uid": turn_uid, "entity_id": entity_id})
+
+    def link_turn_entities_batch(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+
+        query = """
+        UNWIND $rows AS row
+        MATCH (t:Turn {turn_uid: row.turn_uid})
+        MATCH (e:Entity {entity_id: row.entity_id})
+        MERGE (t)-[m:MENTIONS]->(e)
+        SET m.updated_at = datetime()
+        """
+
+        with self.driver.session() as session:
+            session.run(query, {"rows": rows})
 
     def upsert_relation(
         self,
@@ -160,6 +234,44 @@ class Neo4jStore:
         }
         with self.driver.session() as session:
             session.run(query, params)
+
+    def upsert_relations_batch(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+
+        query = """
+        UNWIND $rows AS row
+        MATCH (s:Entity {entity_id: row.source_entity_id})
+        MATCH (t:Entity {entity_id: row.target_entity_id})
+        MERGE (s)-[r:RELATES_TO {relation_type: row.relation_type}]->(t)
+        ON CREATE SET r.weight = row.weight_increment,
+                      r.evidence_turn_ids = row.evidence_turn_ids,
+                      r.created_at = datetime()
+        ON MATCH SET r.weight = coalesce(r.weight, 0.0) + row.weight_increment,
+                     r.evidence_turn_ids = reduce(
+                        acc = coalesce(r.evidence_turn_ids, []),
+                        ev IN coalesce(row.evidence_turn_ids, []) |
+                        CASE WHEN ev IN acc THEN acc ELSE acc + ev END
+                     ),
+                     r.updated_at = datetime()
+        """
+
+        with self.driver.session() as session:
+            session.run(query, {"rows": rows})
+
+    def get_existing_turn_uids(self, turn_uids: Iterable[str]) -> set[str]:
+        ids = list(dict.fromkeys(turn_uids))
+        if not ids:
+            return set()
+
+        query = """
+        MATCH (t:Turn)
+        WHERE t.turn_uid IN $turn_uids
+        RETURN t.turn_uid AS turn_uid
+        """
+        with self.driver.session() as session:
+            records = session.run(query, {"turn_uids": ids})
+            return {str(record["turn_uid"]) for record in records}
 
     def search_entities(self, query_text: str, limit: int = 25) -> list[dict[str, Any]]:
         query = """

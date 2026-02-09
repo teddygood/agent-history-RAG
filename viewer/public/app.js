@@ -196,8 +196,19 @@ function renderGraph(nodes, edges) {
   const svg = d3
     .select(container)
     .append("svg")
+    .attr("class", "graph-svg")
     .attr("viewBox", `0 0 ${width} ${height}`)
     .attr("preserveAspectRatio", "xMidYMid meet");
+
+  const panSurface = svg
+    .append("rect")
+    .attr("class", "pan-surface")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("width", width)
+    .attr("height", height);
+
+  const viewport = svg.append("g").attr("class", "graph-viewport");
 
   const simulation = d3
     .forceSimulation(nodes)
@@ -212,14 +223,14 @@ function renderGraph(nodes, edges) {
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collision", d3.forceCollide().radius(20));
 
-  const link = svg
+  const link = viewport
     .append("g")
     .selectAll("line")
     .data(edges)
     .join("line")
     .attr("class", "link");
 
-  const node = svg
+  const node = viewport
     .append("g")
     .selectAll("circle")
     .data(nodes)
@@ -235,7 +246,7 @@ function renderGraph(nodes, edges) {
         .on("end", dragended)
     );
 
-  const labels = svg
+  const labels = viewport
     .append("g")
     .selectAll("text")
     .data(nodes)
@@ -243,7 +254,7 @@ function renderGraph(nodes, edges) {
     .attr("class", "node-label")
     .text((d) => d.label || d.id);
 
-  const edgeLabels = svg
+  const edgeLabels = viewport
     .append("g")
     .selectAll("text")
     .data(edges)
@@ -255,6 +266,29 @@ function renderGraph(nodes, edges) {
 
   node.append("title").text((d) => `${d.label} (${d.id})`);
   link.append("title").text((d) => (d.evidence_turn_ids || []).join(", "));
+
+  const zoom = d3
+    .zoom()
+    .scaleExtent([0.2, 4])
+    .filter((event) => {
+      const targetTag = event?.target?.tagName?.toLowerCase?.() || "";
+      if (event.type === "wheel") return true;
+      if (event.type === "mousedown") return targetTag !== "circle" && event.button === 0;
+      return targetTag !== "circle";
+    })
+    .on("start", (event) => {
+      if (event.sourceEvent?.type === "mousedown") svg.classed("is-panning", true);
+    })
+    .on("zoom", (event) => {
+      viewport.attr("transform", event.transform);
+    })
+    .on("end", () => {
+      svg.classed("is-panning", false);
+    });
+
+  svg.call(zoom);
+  svg.on("dblclick.zoom", null);
+  panSurface.on("dblclick", null);
 
   simulation.on("tick", () => {
     link

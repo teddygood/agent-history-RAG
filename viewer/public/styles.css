@@ -219,9 +219,24 @@ svg {
   height: 470px;
 }
 
+.graph-svg {
+  cursor: grab;
+  touch-action: none;
+}
+
+.graph-svg.is-panning {
+  cursor: grabbing;
+}
+
+.pan-surface {
+  fill: transparent;
+  pointer-events: all;
+}
+
 .node {
   stroke: #245f66;
   stroke-width: 1.2px;
+  cursor: pointer;
 }
 
 .link {

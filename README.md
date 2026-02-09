@@ -12,6 +12,7 @@ This project builds a traceable RAG pipeline over conversation logs using an ent
 - JSONL turn ingestion (`conversation_id`, `turn_id`, `speaker`, `text`, `timestamp`)
 - Entity extraction including implicit technical concepts (heuristic extractor)
 - Canonical entity normalization + alias merging
+- Korean technical term normalization (e.g. 연속 배칭 -> continuous batching)
 - Entity-to-entity semantic relation graph with evidence turn IDs
 - Query-time entity seeding + graph traversal + Top-K turn retrieval
 - Real-time query tuning sliders (max hops, beam width, prune threshold, importance/recency weights)

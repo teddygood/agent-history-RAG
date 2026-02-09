@@ -39,11 +39,13 @@ class Settings:
     embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
     embedding_cpu_threads: int = int(os.getenv("EMBEDDING_CPU_THREADS", "0"))
 
-    chunk_size_default: int = int(os.getenv("CHUNK_SIZE_DEFAULT", "2048"))
-    chunk_overlap_default: int = int(os.getenv("CHUNK_OVERLAP_DEFAULT", "256"))
-    chunk_size_structured: int = int(os.getenv("CHUNK_SIZE_STRUCTURED", "1024"))
-    chunk_overlap_structured: int = int(os.getenv("CHUNK_OVERLAP_STRUCTURED", "128"))
-    chunk_size_max: int = int(os.getenv("CHUNK_SIZE_MAX", "3072"))
+    # Chunk sizes are in whitespace-delimited tokens (approx. "words").
+    # Defaults are conservative to avoid OOM when using long-context embedding models on CPU.
+    chunk_size_default: int = int(os.getenv("CHUNK_SIZE_DEFAULT", "256"))
+    chunk_overlap_default: int = int(os.getenv("CHUNK_OVERLAP_DEFAULT", "32"))
+    chunk_size_structured: int = int(os.getenv("CHUNK_SIZE_STRUCTURED", "192"))
+    chunk_overlap_structured: int = int(os.getenv("CHUNK_OVERLAP_STRUCTURED", "24"))
+    chunk_size_max: int = int(os.getenv("CHUNK_SIZE_MAX", "512"))
     chunk_structure_min_lines: int = int(os.getenv("CHUNK_STRUCTURE_MIN_LINES", "3"))
     chunk_structure_heading_ratio: float = float(os.getenv("CHUNK_STRUCTURE_HEADING_RATIO", "0.20"))
 

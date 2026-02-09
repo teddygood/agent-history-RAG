@@ -29,6 +29,7 @@ If host port `8000` is busy, run:
 ```bash
 API_HOST_PORT=8001 docker compose up --build
 ```
+The API port is bound to `127.0.0.1` (localhost) by default.
 
 ### 2) Ingest sample data
 ```bash

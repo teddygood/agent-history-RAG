@@ -31,19 +31,37 @@ TECH_KEYWORDS = {
     "query",
     "ranking",
     "rerank",
+    "검색",
+    "그래프",
+    "임베딩",
+    "어텐션",
+    "배칭",
+    "캐시",
+    "추론",
+    "지연",
+    "처리량",
 }
 
 CANONICAL_PHRASES = [
     "continuous batching",
+    "연속 배칭",
     "paged attention",
+    "페이지드 어텐션",
     "kv-cache",
+    "kv 캐시",
     "graph rag",
     "graph-centric rag",
+    "그래프 rag",
+    "그래프 기반 rag",
     "entity graph",
     "vector rag",
+    "벡터 rag",
     "top-k",
+    "top k",
     "beam search",
+    "빔 서치",
     "cosine similarity",
+    "코사인 유사도",
 ]
 
 RELATION_RULES = [
@@ -161,7 +179,7 @@ class HeuristicExtractor:
         return matches
 
     def _extract_ngrams(self, lowered: str) -> list[str]:
-        tokens = re.findall(r"[a-z0-9][a-z0-9\-+/]*", lowered)
+        tokens = re.findall(r"[a-z0-9가-힣][a-z0-9가-힣\-+/]*", lowered)
         out: list[str] = []
         for n in range(1, self.config.max_ngram + 1):
             for i in range(0, len(tokens) - n + 1):

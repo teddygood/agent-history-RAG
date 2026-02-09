@@ -58,7 +58,7 @@ class HashEmbedder(_BaseEmbedder):
 
     @staticmethod
     def _tokenize(text: str) -> list[str]:
-        return re.findall(r"[a-zA-Z0-9_\-+/]+", text.lower())
+        return re.findall(r"[a-zA-Z0-9가-힣_\-+/]+", text.lower())
 
 
 class SentenceTransformerEmbedder(_BaseEmbedder):

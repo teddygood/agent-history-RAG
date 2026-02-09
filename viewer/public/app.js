@@ -52,8 +52,7 @@ async function ingestSample() {
 async function ingestHistory() {
   const payload = {
     source: "both",
-    codex_history_path: "~/.codex/history.jsonl",
-    claude_projects_root: "~/.claude/projects",
+    max_files: 500,
   };
   const res = await fetch("/ingest/history", {
     method: "POST",

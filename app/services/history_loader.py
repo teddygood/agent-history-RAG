@@ -26,7 +26,7 @@ class AgentHistoryLoader:
         return turns
 
     def load_codex_history(self, history_path: str) -> list[TurnInput]:
-        path = Path(history_path).expanduser()
+        path = self._resolve_codex_history_path(history_path)
         if not path.exists():
             return []
 
@@ -59,7 +59,7 @@ class AgentHistoryLoader:
         return turns
 
     def load_claude_projects(self, projects_root: str, max_files: int | None = None) -> list[TurnInput]:
-        root = Path(projects_root).expanduser()
+        root = self._resolve_claude_projects_root(projects_root)
         if not root.exists():
             return []
 
@@ -136,3 +136,19 @@ class AgentHistoryLoader:
         if isinstance(value, str) and value.strip():
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         return datetime.now(timezone.utc)
+
+    def _resolve_codex_history_path(self, configured_path: str) -> Path:
+        primary = Path(configured_path).expanduser()
+        candidates = [primary, Path("/host-home/.codex/history.jsonl")]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return primary
+
+    def _resolve_claude_projects_root(self, configured_root: str) -> Path:
+        primary = Path(configured_root).expanduser()
+        candidates = [primary, Path("/host-home/.claude/projects")]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return primary

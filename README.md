@@ -47,6 +47,17 @@ curl -X POST http://localhost:8000/ingest/history \
   -d '{"source":"both","codex_history_path":"~/.codex/history.jsonl","claude_projects_root":"~/.claude/projects"}'
 ```
 
+When running in Docker Compose, host directories are mounted read-only:
+- `${HOME}/.codex` -> `/host-home/.codex`
+- `${HOME}/.claude` -> `/host-home/.claude`
+
+So this also works in containerized mode:
+```bash
+curl -X POST http://localhost:8000/ingest/history \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"both","codex_history_path":"/host-home/.codex/history.jsonl","claude_projects_root":"/host-home/.claude/projects"}'
+```
+
 ### 3) Query
 ```bash
 curl -X POST http://localhost:8000/query \

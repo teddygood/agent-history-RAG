@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.retrieval.graph_retriever import GraphRetriever
-from app.services.embedder import HashEmbedder
+from app.services.embedder import Embedder, create_embedder
 from app.services.extractor import HeuristicExtractor
 from app.services.history_loader import AgentHistoryLoader
 from app.services.ingestion import IngestionService
@@ -15,7 +15,7 @@ from app.services.neo4j_store import Neo4jStore
 class AppRuntime:
     store: Neo4jStore
     extractor: HeuristicExtractor
-    embedder: HashEmbedder
+    embedder: Embedder
     ingestion: IngestionService
     retriever: GraphRetriever
     jsonl_loader: JSONLLoader
@@ -26,7 +26,7 @@ class AppRuntime:
         store = Neo4jStore()
         store.init_schema()
         extractor = HeuristicExtractor()
-        embedder = HashEmbedder()
+        embedder = create_embedder()
         ingestion = IngestionService(store=store, extractor=extractor, embedder=embedder)
         retriever = GraphRetriever(store=store, extractor=extractor, embedder=embedder)
         return cls(

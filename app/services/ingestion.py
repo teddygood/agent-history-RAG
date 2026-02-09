@@ -4,7 +4,7 @@ from collections import Counter
 from typing import Iterable
 
 from app.models.schemas import IngestStats, TurnInput
-from app.services.embedder import HashEmbedder
+from app.services.embedder import Embedder, HashEmbedder
 from app.services.extractor import HeuristicExtractor
 from app.services.importance import score_turn_importance
 from app.services.neo4j_store import Neo4jStore
@@ -16,7 +16,7 @@ class IngestionService:
         self,
         store: Neo4jStore,
         extractor: HeuristicExtractor | None = None,
-        embedder: HashEmbedder | None = None,
+        embedder: Embedder | None = None,
     ) -> None:
         self.store = store
         self.extractor = extractor or HeuristicExtractor()

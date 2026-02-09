@@ -7,7 +7,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.models.schemas import QueryRequest, QueryResponse, TracePathStep, TurnResult
-from app.services.embedder import HashEmbedder
+from app.services.embedder import Embedder, HashEmbedder
 from app.services.extractor import HeuristicExtractor
 from app.services.neo4j_store import Neo4jStore
 from app.services.normalize import canonicalize
@@ -39,7 +39,7 @@ class GraphRetriever:
         self,
         store: Neo4jStore,
         extractor: HeuristicExtractor | None = None,
-        embedder: HashEmbedder | None = None,
+        embedder: Embedder | None = None,
     ) -> None:
         self.store = store
         self.extractor = extractor or HeuristicExtractor()

@@ -46,7 +46,7 @@ class GraphRetriever:
         self.embedder = embedder or HashEmbedder()
 
     def query(self, request: QueryRequest) -> QueryResponse:
-        query_embedding = self.embedder.embed(request.query)
+        query_embedding = self.embedder.embed_query(request.query)
         seed_candidates = self._find_seed_entities(request.query)
 
         max_hops = request.max_hops or settings.graph_max_hops
@@ -125,7 +125,7 @@ class GraphRetriever:
             names = [canonicalize(query_text)]
 
         by_id: dict[str, dict[str, Any]] = {}
-        query_embedding = self.embedder.embed(query_text)
+        query_embedding = self.embedder.embed_query(query_text)
 
         for name in names:
             for entity in self.store.search_entities(name, limit=20):
@@ -292,6 +292,8 @@ class GraphRetriever:
                 evidence_turn_ids=sorted(evidence_turn_ids),
                 importance_score=round(importance_score, 6),
                 recency_factor=round(recency_factor, 6),
+                chunk_profile=row.get("chunk_profile"),
+                chunk_count=int(row.get("chunk_count", 1) or 1),
                 last_recalled_at=last_recalled_at,
             )
             results.append(turn_result)

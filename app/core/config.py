@@ -11,6 +11,12 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_csv(name: str, default: str) -> tuple[str, ...]:
+    raw = os.getenv(name, default)
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    return tuple(values)
+
+
 @dataclass(frozen=True)
 class Settings:
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
@@ -20,12 +26,23 @@ class Settings:
     neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password: str = os.getenv("NEO4J_PASSWORD", "please-change-me")
 
-    embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "hash")
-    embedding_model_name: str = os.getenv(
-        "EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "auto")
+    embedding_model_primary: str = os.getenv(
+        "EMBEDDING_MODEL_PRIMARY", os.getenv("EMBEDDING_MODEL_NAME", "nlpai-lab/KURE-v1")
     )
+    embedding_model_candidates: tuple[str, ...] = _env_csv("EMBEDDING_MODEL_CANDIDATES", "dragonkue/BGE-m3-ko")
+    embedding_query_prefix: str = os.getenv("EMBEDDING_QUERY_PREFIX", "")
+    embedding_document_prefix: str = os.getenv("EMBEDDING_DOCUMENT_PREFIX", "")
     embedding_fallback_to_hash: bool = _env_bool("EMBEDDING_FALLBACK_TO_HASH", True)
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "64"))
+
+    chunk_size_default: int = int(os.getenv("CHUNK_SIZE_DEFAULT", "2048"))
+    chunk_overlap_default: int = int(os.getenv("CHUNK_OVERLAP_DEFAULT", "256"))
+    chunk_size_structured: int = int(os.getenv("CHUNK_SIZE_STRUCTURED", "1024"))
+    chunk_overlap_structured: int = int(os.getenv("CHUNK_OVERLAP_STRUCTURED", "128"))
+    chunk_size_max: int = int(os.getenv("CHUNK_SIZE_MAX", "3072"))
+    chunk_structure_min_lines: int = int(os.getenv("CHUNK_STRUCTURE_MIN_LINES", "3"))
+    chunk_structure_heading_ratio: float = float(os.getenv("CHUNK_STRUCTURE_HEADING_RATIO", "0.20"))
 
     graph_max_hops: int = int(os.getenv("GRAPH_MAX_HOPS", "3"))
     graph_beam_width: int = int(os.getenv("GRAPH_BEAM_WIDTH", "24"))

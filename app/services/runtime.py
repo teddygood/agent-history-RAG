@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.core.config import settings
 from app.retrieval.graph_retriever import GraphRetriever
 from app.services.embedder import Embedder, create_embedder
 from app.services.extractor import HeuristicExtractor
@@ -41,3 +42,14 @@ class AppRuntime:
 
     def close(self) -> None:
         self.store.close()
+
+    def runtime_profile(self) -> dict[str, object]:
+        return {
+            "embedding": {
+                "provider": getattr(self.embedder, "provider", "unknown"),
+                "model_name": getattr(self.embedder, "model_name", "unknown"),
+                "dim": int(getattr(self.embedder, "dim", settings.embedding_dim)),
+                "model_candidates": list(settings.embedding_model_candidates),
+            },
+            "chunking": self.ingestion.get_chunking_settings(),
+        }

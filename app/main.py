@@ -43,5 +43,8 @@ if viewer_dir.exists():
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, object]:
+    runtime: AppRuntime = app.state.runtime
+    payload: dict[str, object] = {"status": "ok"}
+    payload.update(runtime.runtime_profile())
+    return payload

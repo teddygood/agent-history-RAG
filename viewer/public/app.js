@@ -20,10 +20,12 @@ const appliedParamsEl = document.getElementById("appliedParams");
 const runQueryBtn = document.getElementById("runQuery");
 const loadGraphBtn = document.getElementById("loadGraph");
 const ingestSampleBtn = document.getElementById("ingestSample");
+const ingestHistoryBtn = document.getElementById("ingestHistory");
 
 runQueryBtn.addEventListener("click", runQuery);
 loadGraphBtn.addEventListener("click", loadGraph);
 ingestSampleBtn.addEventListener("click", ingestSample);
+ingestHistoryBtn.addEventListener("click", ingestHistory);
 
 bindSlider(topKInput, topKVal, (v) => `${Number(v)}`);
 bindSlider(maxHopsInput, maxHopsVal, (v) => `${Number(v)}`);
@@ -43,6 +45,30 @@ async function ingestSample() {
     alert(`ingest failed: ${await res.text()}`);
     return;
   }
+  await runQuery();
+  await loadGraph();
+}
+
+async function ingestHistory() {
+  const payload = {
+    source: "both",
+    codex_history_path: "~/.codex/history.jsonl",
+    claude_projects_root: "~/.claude/projects",
+  };
+  const res = await fetch("/ingest/history", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    alert(`history ingest failed: ${await res.text()}`);
+    return;
+  }
+
+  const data = await res.json();
+  alert(
+    `history ingest complete: turns=${data.ingested_turns}, entities=${data.extracted_entities}, relations=${data.extracted_relations}`
+  );
   await runQuery();
   await loadGraph();
 }

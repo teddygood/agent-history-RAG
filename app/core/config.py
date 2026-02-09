@@ -35,6 +35,8 @@ class Settings:
     embedding_document_prefix: str = os.getenv("EMBEDDING_DOCUMENT_PREFIX", "")
     embedding_fallback_to_hash: bool = _env_bool("EMBEDDING_FALLBACK_TO_HASH", True)
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "64"))
+    embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "32"))
+    embedding_cpu_threads: int = int(os.getenv("EMBEDDING_CPU_THREADS", "0"))
 
     chunk_size_default: int = int(os.getenv("CHUNK_SIZE_DEFAULT", "2048"))
     chunk_overlap_default: int = int(os.getenv("CHUNK_OVERLAP_DEFAULT", "256"))
@@ -57,6 +59,9 @@ class Settings:
     reranker_weight: float = float(os.getenv("RERANKER_WEIGHT", "0.20"))
     reranker_fallback_to_base: bool = _env_bool("RERANKER_FALLBACK_TO_BASE", True)
     top_k_default: int = int(os.getenv("TOP_K_DEFAULT", "5"))
+
+    ingest_batch_size: int = int(os.getenv("INGEST_BATCH_SIZE", "32"))
+    ingest_skip_existing_history: bool = _env_bool("INGEST_SKIP_EXISTING_HISTORY", True)
 
 
 settings = Settings()

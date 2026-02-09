@@ -7,6 +7,7 @@ from app.retrieval.graph_retriever import GraphRetriever
 from app.services.embedder import Embedder, create_embedder
 from app.services.extractor import HeuristicExtractor
 from app.services.history_loader import AgentHistoryLoader
+from app.services.ingest_jobs import IngestJobManager
 from app.services.ingestion import IngestionService
 from app.services.jsonl_loader import JSONLLoader
 from app.services.neo4j_store import Neo4jStore
@@ -23,6 +24,7 @@ class AppRuntime:
     retriever: GraphRetriever
     jsonl_loader: JSONLLoader
     history_loader: AgentHistoryLoader
+    ingest_jobs: IngestJobManager
 
     @classmethod
     def create(cls) -> "AppRuntime":
@@ -42,6 +44,7 @@ class AppRuntime:
             retriever=retriever,
             jsonl_loader=JSONLLoader(),
             history_loader=AgentHistoryLoader(),
+            ingest_jobs=IngestJobManager(),
         )
 
     def close(self) -> None:

@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 ChunkProfileLiteral = Literal["auto", "default", "structured"]
+IngestJobStatusLiteral = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 
 
 class TurnInput(BaseModel):
@@ -46,6 +47,26 @@ class IngestResponse(BaseModel):
     ingested_turns: int
     extracted_entities: int
     extracted_relations: int
+
+
+class IngestJobProgress(BaseModel):
+    phase: str = "queued"
+    turns_total: int | None = None
+    turns_processed: int = 0
+    extracted_entities: int = 0
+    extracted_relations: int = 0
+    updated_at: datetime | None = None
+
+
+class IngestJobOut(BaseModel):
+    job_id: str
+    kind: str
+    status: IngestJobStatusLiteral
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    progress: IngestJobProgress = Field(default_factory=IngestJobProgress)
+    error: str | None = None
 
 
 class QueryRequest(BaseModel):

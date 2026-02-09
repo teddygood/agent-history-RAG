@@ -9,6 +9,7 @@ from app.models.schemas import (
     ConversationIngestRequest,
     HistoryIngestRequest,
     IngestResponse,
+    IngestJobOut,
     JSONLIngestRequest,
     RebuildConversationRequest,
     TurnInput,
@@ -143,3 +144,36 @@ def ingest_history(
         extracted_entities=stats.entities,
         extracted_relations=stats.relations,
     )
+
+
+@router.post("/history/start", response_model=IngestJobOut)
+def start_history_ingest(
+    request: HistoryIngestRequest,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> IngestJobOut:
+    job_id = runtime.ingest_jobs.start_history_ingest(runtime=runtime, request=request)
+    payload = runtime.ingest_jobs.get_job(job_id)
+    if not payload:
+        raise HTTPException(status_code=500, detail="failed to create ingest job")
+    return IngestJobOut(**payload)
+
+
+@router.get("/jobs/{job_id}", response_model=IngestJobOut)
+def get_ingest_job(job_id: str, runtime: AppRuntime = Depends(get_runtime)) -> IngestJobOut:
+    payload = runtime.ingest_jobs.get_job(job_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="ingest job not found")
+    return IngestJobOut(**payload)
+
+
+@router.get("/jobs", response_model=list[IngestJobOut])
+def list_ingest_jobs(runtime: AppRuntime = Depends(get_runtime)) -> list[IngestJobOut]:
+    return [IngestJobOut(**job) for job in runtime.ingest_jobs.list_jobs(limit=30)]
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_ingest_job(job_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, object]:
+    ok = runtime.ingest_jobs.cancel_job(job_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="ingest job not found")
+    return {"status": "ok", "job_id": job_id}

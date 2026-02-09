@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 import math
 from typing import Iterable
-from collections.abc import Sized
+from collections.abc import Callable, Sized
 
 from app.models.schemas import IngestStats, TurnInput
 from app.services.embedder import Embedder, HashEmbedder
@@ -27,7 +27,15 @@ class IngestionService:
         self.embedder = embedder or HashEmbedder()
         self.chunker = chunker or TextChunker()
 
-    def ingest_turns(self, turns: Iterable[TurnInput], *, chunk_profile: ChunkProfileName = "auto") -> IngestStats:
+    def ingest_turns(
+        self,
+        turns: Iterable[TurnInput],
+        *,
+        chunk_profile: ChunkProfileName = "auto",
+        progress: Callable[[IngestStats, int, int | None], None] | None = None,
+        progress_every: int = 25,
+        cancel: Callable[[], bool] | None = None,
+    ) -> IngestStats:
         stats = IngestStats()
         relation_counter: Counter[str] = Counter()
         chunk_profile_counter: Counter[str] = Counter()
@@ -37,6 +45,9 @@ class IngestionService:
         total_turns: int | None = len(turns) if isinstance(turns, Sized) else None
 
         for turn in turns:
+            if cancel and cancel():
+                stats.debug["cancelled"] = True
+                break
             turn_uid = f"{turn.conversation_id}:{turn.turn_id}"
             chunk_plan = self.chunker.plan(turn.text, profile=chunk_profile)
             turn_embedding = self._embed_chunks(chunk_plan.chunks)
@@ -110,12 +121,17 @@ class IngestionService:
                 stats.relations += 1
                 relation_counter[relation.relation_type] += 1
 
+            if progress and progress_every > 0 and (stats.turns % progress_every == 0):
+                progress(stats, stats.turns, total_turns)
+
         stats.debug["relation_distribution"] = dict(relation_counter)
         stats.debug["chunk_profile_distribution"] = dict(chunk_profile_counter)
         stats.debug["avg_chunks_per_turn"] = round(total_chunks / max(1, stats.turns), 3)
         stats.debug["max_chunks_per_turn"] = max_chunks
         stats.debug["chunk_profile"] = chunk_profile
         stats.debug["total_turns"] = total_turns
+        if progress:
+            progress(stats, stats.turns, total_turns)
         return stats
 
     def get_chunking_settings(self) -> dict[str, int | float]:

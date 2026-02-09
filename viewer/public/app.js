@@ -105,15 +105,32 @@ async function ingestHistory() {
 }
 
 async function pollIngestJob(jobId) {
+  let consecutiveFailures = 0;
   while (true) {
     const res = await requestJson(`/ingest/jobs/${encodeURIComponent(jobId)}`, null, {
       method: "GET",
       timeoutMs: 30000,
     });
     if (!res.ok) {
-      await sleep(1500);
+      consecutiveFailures += 1;
+      if (res.status === 404) {
+        setStatus(
+          `History ingest 상태를 찾을 수 없습니다(job_id=${jobId}). 서버가 재시작되었을 수 있어요. 다시 Ingest Agent History를 눌러주세요.`,
+          "error"
+        );
+        return;
+      }
+      if (consecutiveFailures >= 10) {
+        setStatus(
+          `History ingest 상태 확인이 계속 실패합니다(job_id=${jobId}). 네트워크/서버 상태를 확인한 뒤 다시 시도하세요.`,
+          "error"
+        );
+        return;
+      }
+      await sleep(Math.min(5000, 1200 * consecutiveFailures));
       continue;
     }
+    consecutiveFailures = 0;
     const job = res.data || {};
     const status = String(job.status || "");
     const progress = job.progress || {};

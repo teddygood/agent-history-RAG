@@ -1,7 +1,21 @@
 const queryInput = document.getElementById("query");
 const topKInput = document.getElementById("topK");
 const seedInput = document.getElementById("seed");
+const maxHopsInput = document.getElementById("maxHops");
+const beamWidthInput = document.getElementById("beamWidth");
+const pruneThresholdInput = document.getElementById("pruneThreshold");
+const importanceWeightInput = document.getElementById("importanceWeight");
+const recencyWeightInput = document.getElementById("recencyWeight");
+
+const topKVal = document.getElementById("topKVal");
+const maxHopsVal = document.getElementById("maxHopsVal");
+const beamWidthVal = document.getElementById("beamWidthVal");
+const pruneThresholdVal = document.getElementById("pruneThresholdVal");
+const importanceWeightVal = document.getElementById("importanceWeightVal");
+const recencyWeightVal = document.getElementById("recencyWeightVal");
+
 const turnList = document.getElementById("turnList");
+const appliedParamsEl = document.getElementById("appliedParams");
 
 const runQueryBtn = document.getElementById("runQuery");
 const loadGraphBtn = document.getElementById("loadGraph");
@@ -10,6 +24,13 @@ const ingestSampleBtn = document.getElementById("ingestSample");
 runQueryBtn.addEventListener("click", runQuery);
 loadGraphBtn.addEventListener("click", loadGraph);
 ingestSampleBtn.addEventListener("click", ingestSample);
+
+bindSlider(topKInput, topKVal, (v) => `${Number(v)}`);
+bindSlider(maxHopsInput, maxHopsVal, (v) => `${Number(v)}`);
+bindSlider(beamWidthInput, beamWidthVal, (v) => `${Number(v)}`);
+bindSlider(pruneThresholdInput, pruneThresholdVal, (v) => Number(v).toFixed(2));
+bindSlider(importanceWeightInput, importanceWeightVal, (v) => Number(v).toFixed(2));
+bindSlider(recencyWeightInput, recencyWeightVal, (v) => Number(v).toFixed(2));
 
 async function ingestSample() {
   const payload = { path: "/workspace/data/samples/conversation.jsonl" };
@@ -30,6 +51,12 @@ async function runQuery() {
   const payload = {
     query: queryInput.value,
     top_k: Number(topKInput.value),
+    max_hops: Number(maxHopsInput.value),
+    beam_width: Number(beamWidthInput.value),
+    prune_threshold: Number(pruneThresholdInput.value),
+    importance_weight: Number(importanceWeightInput.value),
+    recency_weight: Number(recencyWeightInput.value),
+    recall_half_life_hours: 72,
   };
   const res = await fetch("/query", {
     method: "POST",
@@ -39,11 +66,29 @@ async function runQuery() {
 
   if (!res.ok) {
     turnList.innerHTML = `<li class="turn-item">Query failed: ${await res.text()}</li>`;
+    appliedParamsEl.textContent = "";
     return;
   }
 
   const data = await res.json();
+  renderAppliedParams(data.applied_params || payload);
   renderTurns(data.selected_turns || []);
+}
+
+function renderAppliedParams(params) {
+  if (!params || Object.keys(params).length === 0) {
+    appliedParamsEl.textContent = "";
+    return;
+  }
+  const text = [
+    `hops=${params.max_hops}`,
+    `beam=${params.beam_width}`,
+    `prune=${formatNumber(params.prune_threshold)}`,
+    `importance_w=${formatNumber(params.importance_weight)}`,
+    `recency_w=${formatNumber(params.recency_weight)}`,
+    `top_k=${params.top_k}`,
+  ].join(" | ");
+  appliedParamsEl.textContent = text;
 }
 
 function renderTurns(turns) {
@@ -62,10 +107,20 @@ function renderTurns(turns) {
       .map((step) => `${step.from_entity_name} -[${step.relation_type}]-> ${step.to_entity_name}`)
       .join(" | ");
 
+    const breakdown = turn.score_breakdown || {};
+    const breakdownText = [
+      `base ${formatNumber(breakdown.base_score)}`,
+      `+ imp ${formatNumber(breakdown.importance_component)}`,
+      `+ rec ${formatNumber(breakdown.recency_component)}`,
+    ].join(" ");
+    const recalled = turn.last_recalled_at ? `last recall ${formatDateTime(turn.last_recalled_at)}` : "last recall -";
+
     li.innerHTML = `
-      <div class="turn-meta">${turn.conversation_id} / ${turn.turn_id} / score ${turn.score.toFixed(3)}</div>
+      <div class="turn-meta">${escapeHtml(turn.conversation_id)} / ${escapeHtml(turn.turn_id)} / score ${Number(turn.score || 0).toFixed(3)}</div>
       <div class="turn-text">${escapeHtml(turn.text)}</div>
-      <div class="turn-reason">${reasons || "direct entity match"}</div>
+      <div class="turn-stats">importance ${formatNumber(turn.importance_score)} | recency ${formatNumber(turn.recency_factor)} | ${escapeHtml(recalled)}</div>
+      <div class="turn-stats">${escapeHtml(breakdownText)}</div>
+      <div class="turn-reason">${escapeHtml(reasons || "direct entity match")}</div>
     `;
     turnList.appendChild(li);
   }
@@ -189,8 +244,28 @@ function renderGraph(nodes, edges) {
   }
 }
 
+function bindSlider(input, output, formatter) {
+  const refresh = () => {
+    output.textContent = formatter(input.value);
+  };
+  input.addEventListener("input", refresh);
+  refresh();
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function formatNumber(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0.000";
+  return num.toFixed(3);
+}
+
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

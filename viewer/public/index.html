@@ -21,12 +21,34 @@
         </div>
         <div class="row row-grid">
           <div>
-            <label for="topK">Top-K</label>
-            <input id="topK" type="number" min="1" max="20" value="5" />
+            <label for="topK">Top-K <span id="topKVal">5</span></label>
+            <input id="topK" type="range" min="1" max="20" step="1" value="5" />
           </div>
           <div>
             <label for="seed">Graph Seed</label>
             <input id="seed" value="paged attention" />
+          </div>
+        </div>
+        <div class="slider-grid">
+          <div class="slider-item">
+            <label for="maxHops">Max Hops <span id="maxHopsVal">3</span></label>
+            <input id="maxHops" type="range" min="1" max="6" step="1" value="3" />
+          </div>
+          <div class="slider-item">
+            <label for="beamWidth">Beam Width <span id="beamWidthVal">24</span></label>
+            <input id="beamWidth" type="range" min="4" max="120" step="1" value="24" />
+          </div>
+          <div class="slider-item">
+            <label for="pruneThreshold">Prune Threshold <span id="pruneThresholdVal">0.10</span></label>
+            <input id="pruneThreshold" type="range" min="0.01" max="1.00" step="0.01" value="0.10" />
+          </div>
+          <div class="slider-item">
+            <label for="importanceWeight">Importance Weight <span id="importanceWeightVal">0.18</span></label>
+            <input id="importanceWeight" type="range" min="0.00" max="1.00" step="0.01" value="0.18" />
+          </div>
+          <div class="slider-item">
+            <label for="recencyWeight">Recency Weight <span id="recencyWeightVal">0.12</span></label>
+            <input id="recencyWeight" type="range" min="0.00" max="1.00" step="0.01" value="0.12" />
           </div>
         </div>
         <div class="actions">
@@ -39,6 +61,7 @@
       <section class="content-grid">
         <article class="panel">
           <h2>Top Turns</h2>
+          <div id="appliedParams" class="applied-params"></div>
           <ul id="turnList"></ul>
         </article>
 

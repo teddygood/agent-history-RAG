@@ -30,6 +30,8 @@ def main() -> int:
     parser.add_argument("--importance-weight", type=float, default=None)
     parser.add_argument("--recency-weight", type=float, default=None)
     parser.add_argument("--recall-half-life-hours", type=int, default=None)
+    parser.add_argument("--embed-model", default=None, help="Expected active embedding model name for this run")
+    parser.add_argument("--chunk-profile", default="auto", choices=["auto", "default", "structured"])
     parser.add_argument("--out-json", default=None, help="Optional output JSON path")
     args = parser.parse_args()
 
@@ -48,6 +50,7 @@ def main() -> int:
             "recall_half_life_hours": args.recall_half_life_hours,
         }
     )
+    runtime_health = _try_get_json(f"{args.api_base.rstrip('/')}/health", timeout_seconds=args.timeout_seconds)
 
     rankings: list[list[str]] = []
     relevant_sets: list[set[str]] = []
@@ -84,6 +87,11 @@ def main() -> int:
     report = {
         "dataset": str(Path(args.dataset).expanduser().resolve()),
         "api_base": args.api_base,
+        "requested_profile": {
+            "embed_model": args.embed_model,
+            "chunk_profile": args.chunk_profile,
+        },
+        "observed_runtime": runtime_health,
         "examples": summary.examples,
         "mrr": round(summary.mrr, 6),
         "recall_at": {f"k={k}": round(v, 6) for k, v in summary.recall_at.items()},
@@ -146,6 +154,13 @@ def _print_report(report: dict[str, Any]) -> None:
     print("== Graph-RAG Evaluation ==")
     print(f"dataset   : {report['dataset']}")
     print(f"api_base  : {report['api_base']}")
+    print(f"requested : embed_model={report['requested_profile']['embed_model']}, chunk_profile={report['requested_profile']['chunk_profile']}")
+    if report.get("observed_runtime"):
+        observed = report["observed_runtime"]
+        embedding = observed.get("embedding", {}) if isinstance(observed, dict) else {}
+        provider = embedding.get("provider", "-") if isinstance(embedding, dict) else "-"
+        model = embedding.get("model_name", "-") if isinstance(embedding, dict) else "-"
+        print(f"observed  : provider={provider}, model={model}")
     print(f"examples  : {report['examples']}")
     print(f"mrr       : {report['mrr']:.6f}")
     print("recall@k  :", _metric_dict_to_text(report["recall_at"]))
@@ -156,6 +171,21 @@ def _print_report(report: dict[str, Any]) -> None:
 def _metric_dict_to_text(data: dict[str, Any]) -> str:
     parts = [f"{key}={float(value):.6f}" for key, value in data.items()]
     return ", ".join(parts)
+
+
+def _try_get_json(url: str, timeout_seconds: float) -> dict[str, Any] | None:
+    req = url_request.Request(url=url, method="GET")
+    try:
+        with url_request.urlopen(req, timeout=timeout_seconds) as response:
+            content = response.read().decode("utf-8")
+    except Exception:
+        return None
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 if __name__ == "__main__":

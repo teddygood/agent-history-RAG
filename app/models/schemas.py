@@ -23,6 +23,10 @@ class JSONLIngestRequest(BaseModel):
     path: str
 
 
+class RebuildConversationRequest(BaseModel):
+    conversation_id: str = Field(..., min_length=1)
+
+
 class IngestResponse(BaseModel):
     conversation_id: str
     ingested_turns: int

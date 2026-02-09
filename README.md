@@ -44,6 +44,7 @@ curl -X POST http://localhost:8000/query \
 ## API Summary
 - `POST /ingest/conversation`
 - `POST /ingest/jsonl`
+- `POST /ingest/rebuild`
 - `POST /query`
 - `GET /entities/{entity_id}`
 - `GET /turns/{turn_uid}`

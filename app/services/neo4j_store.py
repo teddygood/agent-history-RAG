@@ -240,6 +240,22 @@ class Neo4jStore:
             record = session.run(query, {"turn_uid": turn_uid}).single()
             return dict(record) if record else None
 
+    def get_turns_by_conversation(self, conversation_id: str, limit: int = 10000) -> list[dict[str, Any]]:
+        query = """
+        MATCH (t:Turn {conversation_id: $conversation_id})
+        RETURN t.turn_uid AS turn_uid,
+               t.conversation_id AS conversation_id,
+               t.turn_id AS turn_id,
+               t.speaker AS speaker,
+               t.text AS text,
+               t.timestamp AS timestamp
+        ORDER BY t.timestamp ASC
+        LIMIT $limit
+        """
+        with self.driver.session() as session:
+            records = session.run(query, {"conversation_id": conversation_id, "limit": limit})
+            return [dict(record) for record in records]
+
     def build_subgraph(self, seed: str, limit: int = 120) -> dict[str, list[dict[str, Any]]]:
         seeds = self.search_entities(seed, limit=8)
         node_map: dict[str, dict[str, Any]] = {}

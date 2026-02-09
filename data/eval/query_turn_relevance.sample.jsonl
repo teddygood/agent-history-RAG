@@ -1,0 +1,5 @@
+{"query":"continuous batching이 뭐야?","conversation_id":"conv-1","relevant_turn_uids":["conv-1:t2"]}
+{"query":"continuous batching과 paged attention 관계","conversation_id":"conv-1","relevant_turn_uids":["conv-1:t4"]}
+{"query":"vector rag와 graph-centric rag 차이","conversation_id":"conv-1","relevant_turn_uids":["conv-1:t5"]}
+{"query":"kv-cache 메모리 효율 관련 설명","conversation_id":"conv-1","relevant_turn_uids":["conv-1:t4"]}
+{"query":"throughput을 높이는 스케줄링 전략","conversation_id":"conv-1","relevant_turn_uids":["conv-1:t2","conv-1:t4"]}

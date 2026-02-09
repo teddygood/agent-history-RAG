@@ -10,6 +10,10 @@ from typing import Any
 from urllib import error as url_error
 from urllib import request as url_request
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from app.eval import aggregate_metrics, load_eval_examples
 
 

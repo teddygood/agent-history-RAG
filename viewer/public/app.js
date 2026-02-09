@@ -6,6 +6,10 @@ const beamWidthInput = document.getElementById("beamWidth");
 const pruneThresholdInput = document.getElementById("pruneThreshold");
 const importanceWeightInput = document.getElementById("importanceWeight");
 const recencyWeightInput = document.getElementById("recencyWeight");
+const graphLimitInput = document.getElementById("graphLimit");
+const graphLinkDistanceInput = document.getElementById("graphLinkDistance");
+const graphRepulsionInput = document.getElementById("graphRepulsion");
+const graphNodeScaleInput = document.getElementById("graphNodeScale");
 
 const topKVal = document.getElementById("topKVal");
 const maxHopsVal = document.getElementById("maxHopsVal");
@@ -13,14 +17,21 @@ const beamWidthVal = document.getElementById("beamWidthVal");
 const pruneThresholdVal = document.getElementById("pruneThresholdVal");
 const importanceWeightVal = document.getElementById("importanceWeightVal");
 const recencyWeightVal = document.getElementById("recencyWeightVal");
+const graphLimitVal = document.getElementById("graphLimitVal");
+const graphLinkDistanceVal = document.getElementById("graphLinkDistanceVal");
+const graphRepulsionVal = document.getElementById("graphRepulsionVal");
+const graphNodeScaleVal = document.getElementById("graphNodeScaleVal");
 
 const turnList = document.getElementById("turnList");
 const appliedParamsEl = document.getElementById("appliedParams");
+const statusBannerEl = document.getElementById("statusBanner");
 
 const runQueryBtn = document.getElementById("runQuery");
 const loadGraphBtn = document.getElementById("loadGraph");
 const ingestSampleBtn = document.getElementById("ingestSample");
 const ingestHistoryBtn = document.getElementById("ingestHistory");
+
+let lastGraphData = null;
 
 runQueryBtn.addEventListener("click", runQuery);
 loadGraphBtn.addEventListener("click", loadGraph);
@@ -33,6 +44,11 @@ bindSlider(beamWidthInput, beamWidthVal, (v) => `${Number(v)}`);
 bindSlider(pruneThresholdInput, pruneThresholdVal, (v) => Number(v).toFixed(2));
 bindSlider(importanceWeightInput, importanceWeightVal, (v) => Number(v).toFixed(2));
 bindSlider(recencyWeightInput, recencyWeightVal, (v) => Number(v).toFixed(2));
+bindSlider(graphLimitInput, graphLimitVal, (v) => `${Number(v)}`);
+bindSlider(graphLinkDistanceInput, graphLinkDistanceVal, (v) => `${Number(v)}`, rerenderGraphIfLoaded);
+bindSlider(graphRepulsionInput, graphRepulsionVal, (v) => `${Number(v)}`, rerenderGraphIfLoaded);
+bindSlider(graphNodeScaleInput, graphNodeScaleVal, (v) => Number(v).toFixed(1), rerenderGraphIfLoaded);
+setStatus("준비 완료. 1) Ingest Agent History 2) Run Query 3) Load Graph 순서로 진행하세요.", "info");
 
 async function ingestSample() {
   const payload = { path: "/workspace/data/samples/conversation.jsonl" };
@@ -42,9 +58,10 @@ async function ingestSample() {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    alert(`ingest failed: ${await res.text()}`);
+    setStatus(`Ingest sample failed: ${await res.text()}`, "error");
     return;
   }
+  setStatus("Sample ingest 완료. Query를 확인하고 Load Graph로 그래프를 보세요.", "success");
   await runQuery();
   await loadGraph();
 }
@@ -60,16 +77,15 @@ async function ingestHistory() {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    alert(`history ingest failed: ${await res.text()}`);
+    setStatus(`History ingest failed: ${await res.text()}`, "error");
     return;
   }
 
   const data = await res.json();
-  alert(
-    `history ingest complete: turns=${data.ingested_turns}, entities=${data.extracted_entities}, relations=${data.extracted_relations}`
+  setStatus(
+    `History ingest 완료: turns=${data.ingested_turns}, entities=${data.extracted_entities}, relations=${data.extracted_relations}. 다음: 1) Query 입력 2) Run Query 3) Graph Seed 입력 후 Load Graph`,
+    "success"
   );
-  await runQuery();
-  await loadGraph();
 }
 
 async function runQuery() {
@@ -92,12 +108,14 @@ async function runQuery() {
   if (!res.ok) {
     turnList.innerHTML = `<li class="turn-item">Query failed: ${await res.text()}</li>`;
     appliedParamsEl.textContent = "";
+    setStatus("Query 실행 실패. 입력값과 서버 상태를 확인하세요.", "error");
     return;
   }
 
   const data = await res.json();
   renderAppliedParams(data.applied_params || payload);
   renderTurns(data.selected_turns || []);
+  setStatus(`Query 완료: ${data.selected_turns?.length || 0}개 턴을 찾았습니다.`, "info");
 }
 
 function renderAppliedParams(params) {
@@ -155,14 +173,17 @@ async function loadGraph() {
   const seed = seedInput.value.trim();
   if (!seed) return;
 
-  const res = await fetch(`/graph/subgraph?seed=${encodeURIComponent(seed)}&limit=150`);
+  const graphLimit = Number(graphLimitInput.value);
+  const res = await fetch(`/graph/subgraph?seed=${encodeURIComponent(seed)}&limit=${graphLimit}`);
   if (!res.ok) {
-    alert(`graph load failed: ${await res.text()}`);
+    setStatus(`Graph load failed: ${await res.text()}`, "error");
     return;
   }
 
   const graph = await res.json();
+  lastGraphData = graph;
   renderGraph(graph.nodes || [], graph.edges || []);
+  setStatus(`Graph 로드 완료: nodes=${graph.nodes?.length || 0}, edges=${graph.edges?.length || 0}`, "info");
 }
 
 function renderGraph(nodes, edges) {
@@ -185,9 +206,9 @@ function renderGraph(nodes, edges) {
       d3
         .forceLink(edges)
         .id((d) => d.id)
-        .distance(95)
+        .distance(Number(graphLinkDistanceInput.value))
     )
-    .force("charge", d3.forceManyBody().strength(-220))
+    .force("charge", d3.forceManyBody().strength(-Number(graphRepulsionInput.value)))
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collision", d3.forceCollide().radius(20));
 
@@ -204,7 +225,7 @@ function renderGraph(nodes, edges) {
     .data(nodes)
     .join("circle")
     .attr("class", "node")
-    .attr("r", (d) => 8 + Math.max(0, d.score || 0) * 4)
+    .attr("r", (d) => (8 + Math.max(0, d.score || 0) * 4) * Number(graphNodeScaleInput.value))
     .attr("fill", (d) => (d.kind === "entity" ? "#0f766e" : "#7c3aed"))
     .call(
       d3
@@ -269,12 +290,23 @@ function renderGraph(nodes, edges) {
   }
 }
 
-function bindSlider(input, output, formatter) {
+function bindSlider(input, output, formatter, onChange = null) {
   const refresh = () => {
     output.textContent = formatter(input.value);
+    if (onChange) onChange();
   };
   input.addEventListener("input", refresh);
   refresh();
+}
+
+function rerenderGraphIfLoaded() {
+  if (!lastGraphData) return;
+  renderGraph(lastGraphData.nodes || [], lastGraphData.edges || []);
+}
+
+function setStatus(message, level = "info") {
+  statusBannerEl.textContent = message;
+  statusBannerEl.className = `status-banner status-${level}`;
 }
 
 function formatDateTime(value) {

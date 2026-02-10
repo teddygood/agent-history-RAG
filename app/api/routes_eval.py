@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_runtime
 from app.eval import aggregate_metrics, load_eval_examples
+from app.eval.dataset import EvalExample
 from app.eval.profiles import builtin_eval_profiles
 from app.models.schemas import QueryRequest
 from app.services.runtime import AppRuntime
@@ -19,7 +22,10 @@ router = APIRouter(tags=["eval"])
 
 
 class EvalCompareRequest(BaseModel):
-    dataset_path: str = Field(..., min_length=1, description="Path to eval JSONL (repo-relative or absolute).")
+    dataset_path: str | None = Field(
+        default=None,
+        description="Optional path to eval JSONL (repo-relative or absolute). If omitted, uses saved eval examples.",
+    )
     ks: list[int] = Field(default_factory=lambda: [1, 3, 5], description="K values for Recall@K/nDCG@K.")
     profiles: list[str] = Field(
         default_factory=lambda: ["graph_only", "lexical_only", "embedding_only", "hybrid", "hybrid_rerank"]
@@ -30,6 +36,38 @@ class EvalCompareRequest(BaseModel):
     beam_width: int | None = Field(default=None, ge=4, le=200)
     prune_threshold: float | None = Field(default=None, ge=0.01, le=1.0)
     include_details: bool = Field(default=False, description="If true, include per-example ranked lists.")
+
+
+class EvalExampleIn(BaseModel):
+    query: str = Field(..., min_length=1)
+    relevant_turn_uids: list[str] = Field(..., min_length=1)
+    conversation_id: str | None = None
+
+
+class EvalExampleOut(BaseModel):
+    example_id: str
+    query: str
+    relevant_turn_uids: list[str] = Field(default_factory=list)
+    conversation_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+def _to_optional_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if hasattr(value, "to_native"):
+        native = value.to_native()
+        if isinstance(native, datetime):
+            return native
+    if hasattr(value, "iso_format"):
+        value = value.iso_format()
+    if isinstance(value, str):
+        normalized = value.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized)
+    return None
 
 
 def _resolve_dataset_path(raw: str) -> Path:
@@ -70,12 +108,90 @@ def _dedup_preserve_order(values: list[str]) -> list[str]:
     return out
 
 
+@router.get("/eval/examples/count")
+def count_eval_examples(runtime: AppRuntime = Depends(get_runtime)) -> dict[str, int]:
+    return {"count": runtime.store.count_eval_examples()}
+
+
+@router.get("/eval/examples", response_model=list[EvalExampleOut])
+def list_eval_examples(
+    limit: int = 200,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> list[EvalExampleOut]:
+    rows = runtime.store.list_eval_examples(limit=limit)
+    out: list[EvalExampleOut] = []
+    for row in rows:
+        out.append(
+            EvalExampleOut(
+                example_id=str(row.get("example_id", "")),
+                query=str(row.get("query", "")),
+                relevant_turn_uids=[str(uid) for uid in (row.get("relevant_turn_uids") or [])],
+                conversation_id=str(row.get("conversation_id") or "").strip() or None,
+                created_at=_to_optional_datetime(row.get("created_at")),
+                updated_at=_to_optional_datetime(row.get("updated_at")),
+            )
+        )
+    return out
+
+
+@router.post("/eval/examples", response_model=EvalExampleOut)
+def create_eval_example(
+    request: EvalExampleIn,
+    runtime: AppRuntime = Depends(get_runtime),
+) -> EvalExampleOut:
+    example_id = uuid.uuid4().hex
+    row = runtime.store.upsert_eval_example(
+        example_id=example_id,
+        query=request.query,
+        relevant_turn_uids=list(request.relevant_turn_uids),
+        conversation_id=request.conversation_id,
+    )
+    return EvalExampleOut(
+        example_id=str(row.get("example_id", example_id)),
+        query=str(row.get("query", request.query)),
+        relevant_turn_uids=[str(uid) for uid in (row.get("relevant_turn_uids") or list(request.relevant_turn_uids))],
+        conversation_id=str(row.get("conversation_id") or "").strip() or None,
+        created_at=_to_optional_datetime(row.get("created_at")),
+        updated_at=_to_optional_datetime(row.get("updated_at")) or datetime.now(timezone.utc),
+    )
+
+
+@router.delete("/eval/examples/{example_id}")
+def delete_eval_example(example_id: str, runtime: AppRuntime = Depends(get_runtime)) -> dict[str, object]:
+    ok = runtime.store.delete_eval_example(example_id=example_id)
+    return {"deleted": ok, "example_id": example_id}
+
+
 @router.post("/eval/compare")
 def compare_eval(
     request: EvalCompareRequest,
     runtime: AppRuntime = Depends(get_runtime),
 ) -> dict[str, Any]:
-    dataset_path = _resolve_dataset_path(request.dataset_path)
+    examples: list[EvalExample]
+    dataset_source = "saved"
+    dataset_path: Path | None = None
+    if request.dataset_path and str(request.dataset_path).strip():
+        dataset_path = _resolve_dataset_path(request.dataset_path)
+        dataset_source = "file"
+        examples = load_eval_examples(dataset_path)
+    else:
+        rows = runtime.store.list_eval_examples(limit=10000)
+        examples = [
+            EvalExample(
+                query=str(row.get("query", "")).strip(),
+                relevant_turn_uids=frozenset({str(uid).strip() for uid in (row.get("relevant_turn_uids") or []) if str(uid).strip()}),
+                conversation_id=str(row.get("conversation_id") or "").strip() or None,
+                request_overrides=None,
+            )
+            for row in rows
+            if str(row.get("query", "")).strip()
+        ]
+        if not examples:
+            raise HTTPException(
+                status_code=400,
+                detail="no saved eval examples found; create examples via POST /eval/examples or provide dataset_path",
+            )
+
     ks = _parse_ks(request.ks)
     max_k = max(ks)
 
@@ -103,8 +219,6 @@ def compare_eval(
         "prune_threshold": request.prune_threshold,
     }
     global_overrides = {key: value for key, value in global_overrides.items() if value is not None}
-
-    examples = load_eval_examples(dataset_path)
 
     results: dict[str, Any] = {}
     for profile_name in profiles_to_run:
@@ -169,8 +283,10 @@ def compare_eval(
         }
 
     return {
-        "dataset": str(dataset_path),
-        "api_base": None,
+        "dataset": {
+            "source": dataset_source,
+            "path": str(dataset_path) if dataset_path is not None else None,
+        },
         "observed_runtime": runtime.runtime_profile(),
         "examples": len(examples),
         "requested": {
@@ -183,4 +299,3 @@ def compare_eval(
         "profiles": {name: results[name] for name in profiles_to_run},
         "deltas": deltas,
     }
-

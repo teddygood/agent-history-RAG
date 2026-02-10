@@ -57,7 +57,7 @@ def main() -> int:
     details: list[dict[str, Any]] = []
 
     for idx, example in enumerate(examples, start=1):
-        payload = {"query": example.query, "top_k": max_k}
+        payload = {"query": example.query, "top_k": max_k, "record_recall": False}
         payload.update(global_request_overrides)
         if example.conversation_id:
             payload["conversation_id"] = example.conversation_id

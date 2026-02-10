@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.eval import aggregate_metrics, load_eval_examples
+from app.eval.profiles import builtin_eval_profiles
 
 
 def main() -> int:
@@ -43,7 +44,7 @@ def main() -> int:
     max_k = max(ks)
     examples = load_eval_examples(args.dataset)
 
-    builtin_profiles = _builtin_profiles()
+    builtin_profiles = builtin_eval_profiles()
     profile_names = [name.strip() for name in args.profiles.split(",") if name.strip()]
     if not profile_names:
         raise ValueError("--profiles must include at least one profile name")
@@ -142,56 +143,6 @@ def main() -> int:
         print(f"\nSaved report: {out_path}")
 
     return 0
-
-
-def _builtin_profiles() -> dict[str, dict[str, Any]]:
-    # Keep profiles stable and explicit; evaluation should not drift with env defaults.
-    base_no_bias = {"importance_weight": 0.0, "recency_weight": 0.0}
-    return {
-        "graph_only": {
-            **base_no_bias,
-            "hybrid_enabled": False,
-            "graph_weight": 1.0,
-            "embedding_weight": 0.0,
-            "lexical_weight": 0.0,
-            "rerank_enabled": False,
-        },
-        "lexical_only": {
-            **base_no_bias,
-            "hybrid_enabled": True,
-            "graph_weight": 0.0,
-            "embedding_weight": 0.0,
-            "lexical_weight": 1.0,
-            "rerank_enabled": False,
-        },
-        # Note: This is not a true "vector-only" ANN search. It ranks by embedding similarity
-        # over the candidate pool returned by the API (graph + lexical depending on flags).
-        "embedding_only": {
-            **base_no_bias,
-            "hybrid_enabled": True,
-            "graph_weight": 0.0,
-            "embedding_weight": 1.0,
-            "lexical_weight": 0.0,
-            "rerank_enabled": False,
-        },
-        "hybrid": {
-            **base_no_bias,
-            "hybrid_enabled": True,
-            "graph_weight": 0.62,
-            "embedding_weight": 0.23,
-            "lexical_weight": 0.15,
-            "rerank_enabled": False,
-        },
-        "hybrid_rerank": {
-            **base_no_bias,
-            "hybrid_enabled": True,
-            "graph_weight": 0.62,
-            "embedding_weight": 0.23,
-            "lexical_weight": 0.15,
-            "rerank_enabled": True,
-            "rerank_top_n": 20,
-        },
-    }
 
 
 def _parse_ks(raw: str) -> list[int]:
@@ -332,4 +283,3 @@ if __name__ == "__main__":
     except Exception as exc:  # pragma: no cover
         print(f"Evaluation compare failed: {exc}", file=sys.stderr)
         raise SystemExit(1)
-

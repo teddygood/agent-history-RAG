@@ -41,6 +41,21 @@ const loadGraphBtn = document.getElementById("loadGraph");
 const ingestSampleBtn = document.getElementById("ingestSample");
 const ingestHistoryBtn = document.getElementById("ingestHistory");
 
+const evalDatasetInput = document.getElementById("evalDataset");
+const evalKsInput = document.getElementById("evalKs");
+const evalBaselineInput = document.getElementById("evalBaseline");
+const evalIncludeDetailsInput = document.getElementById("evalIncludeDetails");
+const evalProfileGraphInput = document.getElementById("evalProfileGraph");
+const evalProfileLexicalInput = document.getElementById("evalProfileLexical");
+const evalProfileEmbeddingInput = document.getElementById("evalProfileEmbedding");
+const evalProfileHybridInput = document.getElementById("evalProfileHybrid");
+const evalProfileHybridRerankInput = document.getElementById("evalProfileHybridRerank");
+const runEvalCompareBtn = document.getElementById("runEvalCompare");
+const evalSummaryEl = document.getElementById("evalSummary");
+const evalTableEl = document.getElementById("evalTable");
+const evalDetailsWrapEl = document.getElementById("evalDetailsWrap");
+const evalDetailsEl = document.getElementById("evalDetails");
+
 let lastGraphData = null;
 let busyCounter = 0;
 
@@ -48,6 +63,7 @@ runQueryBtn.addEventListener("click", runQuery);
 loadGraphBtn.addEventListener("click", loadGraph);
 ingestSampleBtn.addEventListener("click", ingestSample);
 ingestHistoryBtn.addEventListener("click", ingestHistory);
+if (runEvalCompareBtn) runEvalCompareBtn.addEventListener("click", runEvalCompare);
 
 bindSlider(topKInput, topKVal, (v) => `${Number(v)}`);
 bindSlider(maxHopsInput, maxHopsVal, (v) => `${Number(v)}`);
@@ -99,6 +115,59 @@ async function ingestHistory() {
       return;
     }
     await pollIngestJob(jobId);
+  } finally {
+    popBusy();
+  }
+}
+
+async function runEvalCompare() {
+  if (isBusy()) return;
+  const datasetPath = evalDatasetInput?.value?.trim() || "";
+  if (!datasetPath) {
+    setStatus("Dataset Path가 비어있습니다.", "error");
+    return;
+  }
+
+  const ks = parseKs(evalKsInput?.value || "");
+  if (!ks.length) {
+    setStatus("K Values가 올바르지 않습니다. 예: 1,3,5", "error");
+    return;
+  }
+
+  const profiles = [];
+  if (evalProfileGraphInput?.checked) profiles.push("graph_only");
+  if (evalProfileLexicalInput?.checked) profiles.push("lexical_only");
+  if (evalProfileEmbeddingInput?.checked) profiles.push("embedding_only");
+  if (evalProfileHybridInput?.checked) profiles.push("hybrid");
+  if (evalProfileHybridRerankInput?.checked) profiles.push("hybrid_rerank");
+
+  if (!profiles.length) {
+    setStatus("최소 1개 이상의 profile을 선택하세요.", "error");
+    return;
+  }
+
+  const baseline = String(evalBaselineInput?.value || "hybrid").trim() || "hybrid";
+  const includeDetails = Boolean(evalIncludeDetailsInput?.checked);
+
+  const payload = {
+    dataset_path: datasetPath,
+    ks,
+    profiles,
+    baseline,
+    include_details: includeDetails,
+    max_hops: Number(maxHopsInput.value),
+    beam_width: Number(beamWidthInput.value),
+    prune_threshold: Number(pruneThresholdInput.value),
+  };
+
+  setStatus("Evaluation 실행 중...", "info");
+  pushBusy();
+  try {
+    const res = await requestJson("/eval/compare", payload, { timeoutMs: 15 * 60 * 1000 });
+    if (!res.ok) return;
+    const report = res.data || {};
+    renderEvalReport(report);
+    setStatus("Evaluation 완료. 결과를 확인하세요.", "success");
   } finally {
     popBusy();
   }
@@ -270,6 +339,88 @@ function renderTurns(turns) {
       <div class="turn-reason">${escapeHtml(reasons || "direct entity match")}</div>
     `;
     turnList.appendChild(li);
+  }
+}
+
+function renderEvalReport(report) {
+  if (!evalSummaryEl || !evalTableEl) return;
+
+  const dataset = report.dataset || "-";
+  const examples = Number(report.examples || 0);
+  const requested = report.requested || {};
+  const ks = Array.isArray(requested.ks) ? requested.ks : [];
+  const baseline = String(requested.baseline || "hybrid");
+
+  const runtime = report.observed_runtime || {};
+  const embedding = runtime.embedding || {};
+  const provider = embedding.provider || "-";
+  const model = embedding.model_name || "-";
+  const reranker = runtime.reranker || {};
+  const rerankerReady = Boolean(reranker.available);
+
+  evalSummaryEl.innerHTML = `
+    <div><strong>dataset</strong>: ${escapeHtml(dataset)} | <strong>examples</strong>: ${examples}</div>
+    <div><strong>embedder</strong>: ${escapeHtml(provider)} / ${escapeHtml(model)} | <strong>reranker_ready</strong>: ${rerankerReady}</div>
+    <div><strong>baseline</strong>: ${escapeHtml(baseline)} | <strong>ks</strong>: ${escapeHtml(ks.join(",") || "-")}</div>
+  `;
+
+  const profilesObj = report.profiles || {};
+  const deltas = report.deltas || {};
+  const order = Array.isArray(requested.profiles) ? requested.profiles.slice() : Object.keys(profilesObj);
+  for (const name of Object.keys(profilesObj)) {
+    if (!order.includes(name)) order.push(name);
+  }
+
+  const maxK = ks.length ? Math.max(...ks) : 5;
+
+  const table = document.createElement("table");
+  table.className = "eval-table";
+  const thead = document.createElement("thead");
+  const headerCells = [
+    "profile",
+    "mrr",
+    "d_mrr",
+    ...ks.flatMap((k) => [`recall@${k}`, `d_r@${k}`]),
+    `ndcg@${maxK}`,
+  ];
+  thead.innerHTML = `<tr>${headerCells.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  for (const name of order) {
+    const item = profilesObj[name];
+    if (!item) continue;
+
+    const mrr = Number(item.mrr || 0);
+    const dmrr = Number(deltas?.[name]?.mrr || 0);
+    const ndcg = Number(item?.ndcg_at?.[`k=${maxK}`] || 0);
+
+    const cells = [
+      `<td><strong>${escapeHtml(name)}</strong></td>`,
+      `<td>${mrr.toFixed(6)}</td>`,
+      `<td>${formatDelta(dmrr)}</td>`,
+    ];
+
+    for (const k of ks) {
+      const key = `k=${k}`;
+      const r = Number(item?.recall_at?.[key] || 0);
+      const dr = Number(deltas?.[name]?.recall_at?.[key] || 0);
+      cells.push(`<td>${r.toFixed(6)}</td>`);
+      cells.push(`<td>${formatDelta(dr)}</td>`);
+    }
+
+    cells.push(`<td>${ndcg.toFixed(6)}</td>`);
+    tbody.innerHTML += `<tr>${cells.join("")}</tr>`;
+  }
+  table.appendChild(tbody);
+
+  evalTableEl.innerHTML = "";
+  evalTableEl.appendChild(table);
+
+  if (evalDetailsEl && evalDetailsWrapEl) {
+    const includeDetails = Boolean(requested.include_details);
+    evalDetailsWrapEl.style.display = includeDetails ? "block" : "none";
+    evalDetailsEl.textContent = JSON.stringify(report, null, 2);
   }
 }
 
@@ -477,7 +628,7 @@ function setStatus(message, level = "info") {
 }
 
 function setBusy(isBusyFlag) {
-  const buttons = [runQueryBtn, loadGraphBtn, ingestSampleBtn, ingestHistoryBtn];
+  const buttons = [runQueryBtn, loadGraphBtn, ingestSampleBtn, ingestHistoryBtn, runEvalCompareBtn].filter(Boolean);
   for (const button of buttons) {
     button.disabled = Boolean(isBusyFlag);
   }
@@ -613,6 +764,26 @@ function formatNumber(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return "0.000";
   return num.toFixed(3);
+}
+
+function parseKs(raw) {
+  const parts = String(raw)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const values = [];
+  for (const part of parts) {
+    const num = Number.parseInt(part, 10);
+    if (Number.isFinite(num) && num > 0) values.push(num);
+  }
+  return Array.from(new Set(values)).sort((a, b) => a - b);
+}
+
+function formatDelta(value) {
+  const num = Number(value || 0);
+  const cls = num >= 0 ? "eval-delta-pos" : "eval-delta-neg";
+  const text = `${num >= 0 ? "+" : ""}${num.toFixed(6)}`;
+  return `<span class="${cls}">${escapeHtml(text)}</span>`;
 }
 
 function escapeHtml(value) {

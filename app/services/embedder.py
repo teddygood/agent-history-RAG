@@ -178,9 +178,16 @@ class SentenceTransformerEmbedder(_BaseEmbedder):
         self.query_prefix = profile.query_prefix
         self.document_prefix = profile.document_prefix
         self.batch_size = max(1, int(settings.embedding_batch_size))
+        self.max_seq_length = max(0, int(getattr(settings, "embedding_max_seq_length", 0) or 0))
 
         self._configure_cpu_threads()
         self.model = SentenceTransformer(self.model_name)
+        if self.max_seq_length > 0:
+            # Prevent OOM on long inputs; SentenceTransformer will truncate above this length.
+            try:
+                self.model.max_seq_length = self.max_seq_length
+            except Exception:
+                pass
         self.dim = int(self.model.get_sentence_embedding_dimension() or settings.embedding_dim)
 
     def _configure_cpu_threads(self) -> None:

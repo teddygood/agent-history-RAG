@@ -23,6 +23,7 @@ class Neo4jStore:
         queries = [
             "CREATE CONSTRAINT turn_uid_unique IF NOT EXISTS FOR (t:Turn) REQUIRE t.turn_uid IS UNIQUE",
             "CREATE CONSTRAINT entity_id_unique IF NOT EXISTS FOR (e:Entity) REQUIRE e.entity_id IS UNIQUE",
+            "CREATE CONSTRAINT eval_example_id_unique IF NOT EXISTS FOR (x:EvalExample) REQUIRE x.example_id IS UNIQUE",
             "CREATE FULLTEXT INDEX turn_text_fulltext IF NOT EXISTS FOR (t:Turn) ON EACH [t.text]",
         ]
         with self.driver.session() as session:
@@ -490,3 +491,77 @@ class Neo4jStore:
                 break
 
         return {"nodes": list(node_map.values()), "edges": list(edge_map.values())}
+
+    def upsert_eval_example(
+        self,
+        *,
+        example_id: str,
+        query: str,
+        relevant_turn_uids: list[str],
+        conversation_id: str | None = None,
+    ) -> dict[str, Any]:
+        query_text = query.strip()
+        if not query_text:
+            raise ValueError("query must be non-empty")
+        relevant = [uid.strip() for uid in relevant_turn_uids if str(uid).strip()]
+        if not relevant:
+            raise ValueError("relevant_turn_uids must be non-empty")
+
+        cypher = """
+        MERGE (x:EvalExample {example_id: $example_id})
+        ON CREATE SET x.query = $query,
+                      x.conversation_id = $conversation_id,
+                      x.relevant_turn_uids = $relevant_turn_uids,
+                      x.created_at = datetime(),
+                      x.updated_at = datetime()
+        ON MATCH SET x.query = $query,
+                     x.conversation_id = $conversation_id,
+                     x.relevant_turn_uids = $relevant_turn_uids,
+                     x.updated_at = datetime()
+        RETURN x.example_id AS example_id,
+               x.query AS query,
+               x.conversation_id AS conversation_id,
+               coalesce(x.relevant_turn_uids, []) AS relevant_turn_uids,
+               x.created_at AS created_at,
+               x.updated_at AS updated_at
+        """
+        params = {
+            "example_id": example_id,
+            "query": query_text,
+            "conversation_id": conversation_id,
+            "relevant_turn_uids": relevant,
+        }
+        with self.driver.session() as session:
+            record = session.run(cypher, params).single()
+            return dict(record) if record else {"example_id": example_id}
+
+    def list_eval_examples(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        cypher = """
+        MATCH (x:EvalExample)
+        RETURN x.example_id AS example_id,
+               x.query AS query,
+               x.conversation_id AS conversation_id,
+               coalesce(x.relevant_turn_uids, []) AS relevant_turn_uids,
+               x.created_at AS created_at,
+               x.updated_at AS updated_at
+        ORDER BY x.created_at DESC
+        LIMIT $limit
+        """
+        with self.driver.session() as session:
+            records = session.run(cypher, {"limit": max(1, int(limit))})
+            return [dict(record) for record in records]
+
+    def count_eval_examples(self) -> int:
+        cypher = "MATCH (x:EvalExample) RETURN count(x) AS count"
+        with self.driver.session() as session:
+            record = session.run(cypher).single()
+            if not record:
+                return 0
+            return int(record.get("count", 0) or 0)
+
+    def delete_eval_example(self, *, example_id: str) -> bool:
+        cypher = "MATCH (x:EvalExample {example_id: $example_id}) DELETE x"
+        with self.driver.session() as session:
+            result = session.run(cypher, {"example_id": example_id})
+            summary = result.consume()
+            return bool(summary.counters.nodes_deleted)

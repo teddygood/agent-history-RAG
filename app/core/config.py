@@ -36,8 +36,9 @@ class Settings:
     embedding_fallback_to_hash: bool = _env_bool("EMBEDDING_FALLBACK_TO_HASH", True)
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "64"))
     # Keep defaults conservative to avoid OOM on CPU-only local environments.
-    embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "8"))
+    embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "4"))
     embedding_cpu_threads: int = int(os.getenv("EMBEDDING_CPU_THREADS", "0"))
+    embedding_max_seq_length: int = int(os.getenv("EMBEDDING_MAX_SEQ_LENGTH", "512"))
 
     # Chunk sizes are in whitespace-delimited tokens (approx. "words").
     # Defaults are conservative to avoid OOM when using long-context embedding models on CPU.

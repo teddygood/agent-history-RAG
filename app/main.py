@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.routes_eval import router as eval_router
 from app.api.routes_graph import router as graph_router
 from app.api.routes_ingest import router as ingest_router
 from app.api.routes_query import router as query_router
@@ -36,6 +37,7 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(query_router)
 app.include_router(graph_router)
+app.include_router(eval_router)
 
 viewer_dir = Path(__file__).resolve().parents[1] / "viewer" / "public"
 if viewer_dir.exists():

@@ -5,8 +5,9 @@ services:
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-please-change-me}
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      # Bind Neo4j ports to localhost and allow overriding host ports to avoid conflicts
+      - "127.0.0.1:${NEO4J_HTTP_HOST_PORT:-17474}:7474"
+      - "127.0.0.1:${NEO4J_BOLT_HOST_PORT:-17687}:7687"
     volumes:
       - neo4j_data:/data
 

@@ -100,6 +100,17 @@ python scripts/eval_queries.py \
   --chunk-profile auto
 ```
 
+### 5-1) Compare retrieval configs (graph-only vs lexical-only vs hybrid)
+Run multiple profiles on the same dataset and print a comparison table:
+```bash
+python scripts/eval_compare.py \
+  --dataset data/eval/query_turn_relevance.sample.jsonl \
+  --api-base http://localhost:8000 \
+  --k 1,3,5 \
+  --profiles graph_only,lexical_only,embedding_only,hybrid,hybrid_rerank \
+  --baseline hybrid
+```
+
 Save a detailed JSON report:
 ```bash
 python scripts/eval_queries.py \

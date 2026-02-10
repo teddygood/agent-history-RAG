@@ -40,6 +40,7 @@ const runQueryBtn = document.getElementById("runQuery");
 const loadGraphBtn = document.getElementById("loadGraph");
 const ingestSampleBtn = document.getElementById("ingestSample");
 const ingestHistoryBtn = document.getElementById("ingestHistory");
+const jumpToEvalBtn = document.getElementById("jumpToEval");
 
 const evalDatasetInput = document.getElementById("evalDataset");
 const evalKsInput = document.getElementById("evalKs");
@@ -64,6 +65,7 @@ loadGraphBtn.addEventListener("click", loadGraph);
 ingestSampleBtn.addEventListener("click", ingestSample);
 ingestHistoryBtn.addEventListener("click", ingestHistory);
 if (runEvalCompareBtn) runEvalCompareBtn.addEventListener("click", runEvalCompare);
+if (jumpToEvalBtn) jumpToEvalBtn.addEventListener("click", scrollToEval);
 
 bindSlider(topKInput, topKVal, (v) => `${Number(v)}`);
 bindSlider(maxHopsInput, maxHopsVal, (v) => `${Number(v)}`);
@@ -167,10 +169,17 @@ async function runEvalCompare() {
     if (!res.ok) return;
     const report = res.data || {};
     renderEvalReport(report);
+    scrollToEval();
     setStatus("Evaluation 완료. 결과를 확인하세요.", "success");
   } finally {
     popBusy();
   }
+}
+
+function scrollToEval() {
+  const panel = document.getElementById("evaluationPanel");
+  if (!panel) return;
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function pollIngestJob(jobId) {

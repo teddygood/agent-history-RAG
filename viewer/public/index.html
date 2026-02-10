@@ -100,6 +100,7 @@
           <button id="loadGraph">Load Graph</button>
           <button id="ingestSample">Ingest Sample</button>
           <button id="ingestHistory">Ingest Agent History</button>
+          <button id="jumpToEval" class="button-secondary">Jump to Eval</button>
         </div>
       </section>
 
@@ -115,7 +116,7 @@
           <div id="graphCanvas"></div>
         </article>
 
-        <article class="panel panel-wide">
+        <article id="evaluationPanel" class="panel panel-wide">
           <h2>Evaluation</h2>
           <p class="panel-hint">
             Query-turn relevance JSONL로 Recall@K/MRR/nDCG를 비교합니다. 샘플 데이터셋을 쓰려면 먼저

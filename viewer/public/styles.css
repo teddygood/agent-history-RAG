@@ -164,6 +164,10 @@ button {
   font-weight: 600;
 }
 
+button.button-secondary {
+  background: #334155;
+}
+
 button:hover {
   filter: brightness(0.95);
 }
@@ -179,6 +183,29 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr 1.4fr;
   gap: 0.9rem;
+}
+
+@media (max-width: 980px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-wide {
+    grid-column: auto;
+  }
+
+  .row-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .slider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .eval-run-btn {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 .panel {

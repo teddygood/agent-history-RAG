@@ -162,7 +162,7 @@ class GraphRetriever:
                 rerank_weight=rerank_weight,
             )
         selected_turns = turn_results[: request.top_k]
-        if selected_turns:
+        if selected_turns and request.record_recall:
             recalled_at = datetime.now(timezone.utc)
             self.store.mark_turns_recalled([turn.turn_uid for turn in selected_turns], recalled_at=recalled_at)
             for turn in selected_turns:

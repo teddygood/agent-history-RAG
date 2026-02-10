@@ -73,6 +73,7 @@ class QueryRequest(BaseModel):
     query: str = Field(..., min_length=1)
     conversation_id: str | None = None
     top_k: int = Field(default=5, ge=1, le=50)
+    record_recall: bool = Field(default=True, description="If true, update turn recall metadata on retrieval")
     max_hops: int | None = Field(default=None, ge=1, le=6)
     beam_width: int | None = Field(default=None, ge=4, le=200)
     prune_threshold: float | None = Field(default=None, ge=0.01, le=1.0)

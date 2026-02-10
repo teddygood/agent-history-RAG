@@ -42,7 +42,6 @@ const ingestSampleBtn = document.getElementById("ingestSample");
 const ingestHistoryBtn = document.getElementById("ingestHistory");
 const jumpToEvalBtn = document.getElementById("jumpToEval");
 
-const evalDatasetInput = document.getElementById("evalDataset");
 const evalKsInput = document.getElementById("evalKs");
 const evalBaselineInput = document.getElementById("evalBaseline");
 const evalIncludeDetailsInput = document.getElementById("evalIncludeDetails");
@@ -52,12 +51,20 @@ const evalProfileEmbeddingInput = document.getElementById("evalProfileEmbedding"
 const evalProfileHybridInput = document.getElementById("evalProfileHybrid");
 const evalProfileHybridRerankInput = document.getElementById("evalProfileHybridRerank");
 const runEvalCompareBtn = document.getElementById("runEvalCompare");
+const saveEvalExampleBtn = document.getElementById("saveEvalExample");
+const clearEvalSelectionBtn = document.getElementById("clearEvalSelection");
+const refreshEvalSetBtn = document.getElementById("refreshEvalSet");
+const evalSetCountEl = document.getElementById("evalSetCount");
+const evalSelectedCountEl = document.getElementById("evalSelectedCount");
+const evalCurrentQueryEl = document.getElementById("evalCurrentQuery");
 const evalSummaryEl = document.getElementById("evalSummary");
 const evalTableEl = document.getElementById("evalTable");
 const evalDetailsWrapEl = document.getElementById("evalDetailsWrap");
 const evalDetailsEl = document.getElementById("evalDetails");
 
 let lastGraphData = null;
+let lastQueryTurns = [];
+const evalSelectedTurnUids = new Set();
 let busyCounter = 0;
 
 runQueryBtn.addEventListener("click", runQuery);
@@ -66,6 +73,11 @@ ingestSampleBtn.addEventListener("click", ingestSample);
 ingestHistoryBtn.addEventListener("click", ingestHistory);
 if (runEvalCompareBtn) runEvalCompareBtn.addEventListener("click", runEvalCompare);
 if (jumpToEvalBtn) jumpToEvalBtn.addEventListener("click", scrollToEval);
+if (saveEvalExampleBtn) saveEvalExampleBtn.addEventListener("click", saveEvalExample);
+if (clearEvalSelectionBtn) clearEvalSelectionBtn.addEventListener("click", clearEvalSelection);
+if (refreshEvalSetBtn) refreshEvalSetBtn.addEventListener("click", refreshEvalSetCount);
+if (queryInput) queryInput.addEventListener("input", refreshEvalCurrentQuery);
+if (turnList) turnList.addEventListener("change", onTurnListChange);
 
 bindSlider(topKInput, topKVal, (v) => `${Number(v)}`);
 bindSlider(maxHopsInput, maxHopsVal, (v) => `${Number(v)}`);
@@ -82,6 +94,8 @@ bindSlider(graphLinkDistanceInput, graphLinkDistanceVal, (v) => `${Number(v)}`, 
 bindSlider(graphRepulsionInput, graphRepulsionVal, (v) => `${Number(v)}`, rerenderGraphIfLoaded);
 bindSlider(graphNodeScaleInput, graphNodeScaleVal, (v) => Number(v).toFixed(1), rerenderGraphIfLoaded);
 setStatus("준비 완료. 1) Ingest Agent History 2) Run Query 3) Load Graph 순서로 진행하세요.", "info");
+refreshEvalCurrentQuery();
+refreshEvalSetCount();
 
 async function ingestSample() {
   if (isBusy()) return;
@@ -124,12 +138,6 @@ async function ingestHistory() {
 
 async function runEvalCompare() {
   if (isBusy()) return;
-  const datasetPath = evalDatasetInput?.value?.trim() || "";
-  if (!datasetPath) {
-    setStatus("Dataset Path가 비어있습니다.", "error");
-    return;
-  }
-
   const ks = parseKs(evalKsInput?.value || "");
   if (!ks.length) {
     setStatus("K Values가 올바르지 않습니다. 예: 1,3,5", "error");
@@ -152,7 +160,6 @@ async function runEvalCompare() {
   const includeDetails = Boolean(evalIncludeDetailsInput?.checked);
 
   const payload = {
-    dataset_path: datasetPath,
     ks,
     profiles,
     baseline,
@@ -174,6 +181,77 @@ async function runEvalCompare() {
   } finally {
     popBusy();
   }
+}
+
+async function saveEvalExample() {
+  if (isBusy()) return;
+  const queryText = queryInput.value.trim();
+  if (!queryText) {
+    setStatus("Query가 비어있습니다.", "error");
+    return;
+  }
+  if (evalSelectedTurnUids.size <= 0) {
+    setStatus("Relevant로 표시한 턴이 없습니다. Top Turns에서 체크한 뒤 저장하세요.", "error");
+    return;
+  }
+
+  setStatus("Eval example 저장 중...", "info");
+  pushBusy();
+  try {
+    const payload = {
+      query: queryText,
+      relevant_turn_uids: Array.from(evalSelectedTurnUids),
+    };
+    const res = await requestJson("/eval/examples", payload, { timeoutMs: 60000 });
+    if (!res.ok) return;
+    clearEvalSelection();
+    await refreshEvalSetCount();
+    setStatus("Eval example 저장 완료. 이제 Run Eval Compare로 비교할 수 있어요.", "success");
+  } finally {
+    popBusy();
+  }
+}
+
+function refreshEvalCurrentQuery() {
+  if (!evalCurrentQueryEl) return;
+  evalCurrentQueryEl.textContent = queryInput?.value?.trim() || "-";
+}
+
+async function refreshEvalSetCount() {
+  if (!evalSetCountEl) return;
+  const res = await requestJson("/eval/examples/count", null, { method: "GET", timeoutMs: 30000 });
+  if (!res.ok) return;
+  const count = Number(res.data?.count || 0);
+  evalSetCountEl.textContent = `${Number.isFinite(count) ? count : 0}`;
+}
+
+function setEvalSelectedCount() {
+  if (!evalSelectedCountEl) return;
+  evalSelectedCountEl.textContent = `${evalSelectedTurnUids.size}`;
+}
+
+function clearEvalSelection() {
+  evalSelectedTurnUids.clear();
+  setEvalSelectedCount();
+  for (const checkbox of document.querySelectorAll("input.eval-relevant-checkbox")) {
+    checkbox.checked = false;
+    const li = checkbox.closest(".turn-item");
+    if (li) li.classList.remove("turn-item-selected");
+  }
+}
+
+function onTurnListChange(event) {
+  const target = event.target;
+  if (!target || !target.classList || !target.classList.contains("eval-relevant-checkbox")) return;
+  const uid = target.dataset?.uid;
+  if (!uid) return;
+
+  if (target.checked) evalSelectedTurnUids.add(uid);
+  else evalSelectedTurnUids.delete(uid);
+
+  const li = target.closest(".turn-item");
+  if (li) li.classList.toggle("turn-item-selected", Boolean(target.checked));
+  setEvalSelectedCount();
 }
 
 function scrollToEval() {
@@ -312,6 +390,8 @@ function renderAppliedParams(params) {
 
 function renderTurns(turns) {
   turnList.innerHTML = "";
+  lastQueryTurns = turns || [];
+  clearEvalSelection();
   if (!turns.length) {
     turnList.innerHTML = '<li class="turn-item">No turns found.</li>';
     return;
@@ -338,9 +418,11 @@ function renderTurns(turns) {
     ].join(" ");
     const recalled = turn.last_recalled_at ? `last recall ${formatDateTime(turn.last_recalled_at)}` : "last recall -";
     const chunkMeta = `chunks ${Number(turn.chunk_count || 1)} (${turn.chunk_profile || "default"})`;
+    const turnUid = String(turn.turn_uid || "").trim();
 
     li.innerHTML = `
       <div class="turn-meta">${escapeHtml(turn.conversation_id)} / ${escapeHtml(turn.turn_id)} / score ${Number(turn.score || 0).toFixed(3)}</div>
+      <div class="turn-stats"><label class="toggle-control"><input class="eval-relevant-checkbox" type="checkbox" data-uid="${escapeHtml(turnUid)}" /><span>Relevant</span></label></div>
       <div class="turn-text">${escapeHtml(turn.text)}</div>
       <div class="turn-stats">importance ${formatNumber(turn.importance_score)} | recency ${formatNumber(turn.recency_factor)} | ${escapeHtml(recalled)}</div>
       <div class="turn-stats">${escapeHtml(chunkMeta)}</div>
@@ -354,7 +436,9 @@ function renderTurns(turns) {
 function renderEvalReport(report) {
   if (!evalSummaryEl || !evalTableEl) return;
 
-  const dataset = report.dataset || "-";
+  const dataset = report.dataset || {};
+  const datasetSource = dataset.source || "-";
+  const datasetPath = dataset.path || null;
   const examples = Number(report.examples || 0);
   const requested = report.requested || {};
   const ks = Array.isArray(requested.ks) ? requested.ks : [];
@@ -368,7 +452,7 @@ function renderEvalReport(report) {
   const rerankerReady = Boolean(reranker.available);
 
   evalSummaryEl.innerHTML = `
-    <div><strong>dataset</strong>: ${escapeHtml(dataset)} | <strong>examples</strong>: ${examples}</div>
+    <div><strong>dataset</strong>: source=${escapeHtml(datasetSource)}${datasetPath ? ` path=${escapeHtml(datasetPath)}` : ""} | <strong>examples</strong>: ${examples}</div>
     <div><strong>embedder</strong>: ${escapeHtml(provider)} / ${escapeHtml(model)} | <strong>reranker_ready</strong>: ${rerankerReady}</div>
     <div><strong>baseline</strong>: ${escapeHtml(baseline)} | <strong>ks</strong>: ${escapeHtml(ks.join(",") || "-")}</div>
   `;
@@ -637,7 +721,16 @@ function setStatus(message, level = "info") {
 }
 
 function setBusy(isBusyFlag) {
-  const buttons = [runQueryBtn, loadGraphBtn, ingestSampleBtn, ingestHistoryBtn, runEvalCompareBtn].filter(Boolean);
+  const buttons = [
+    runQueryBtn,
+    loadGraphBtn,
+    ingestSampleBtn,
+    ingestHistoryBtn,
+    runEvalCompareBtn,
+    saveEvalExampleBtn,
+    clearEvalSelectionBtn,
+    refreshEvalSetBtn,
+  ].filter(Boolean);
   for (const button of buttons) {
     button.disabled = Boolean(isBusyFlag);
   }

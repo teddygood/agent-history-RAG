@@ -119,19 +119,29 @@
         <article id="evaluationPanel" class="panel panel-wide">
           <h2>Evaluation</h2>
           <p class="panel-hint">
-            Query-turn relevance JSONL로 Recall@K/MRR/nDCG를 비교합니다. 샘플 데이터셋을 쓰려면 먼저
-            <strong>Ingest Sample</strong>을 실행하세요.
+            Top Turns에서 <strong>Relevant</strong>로 표시한 턴들을 저장해 eval set을 만들고, 그 eval set으로
+            profile별 Recall@K/MRR/nDCG를 비교합니다. (eval set은 Neo4j에 저장됩니다)
           </p>
 
           <div class="eval-controls">
             <div class="row row-grid">
               <div>
-                <label for="evalDataset">Dataset Path</label>
-                <input id="evalDataset" value="data/eval/query_turn_relevance.sample.jsonl" />
-              </div>
-              <div>
                 <label for="evalKs">K Values</label>
                 <input id="evalKs" value="1,3,5" />
+              </div>
+              <div class="eval-metrics-box">
+                <div class="eval-metrics-line">
+                  <span class="eval-metrics-label">Eval set</span>
+                  <strong><span id="evalSetCount">0</span></strong>
+                  <span class="eval-metrics-muted">examples</span>
+                  <button id="refreshEvalSet" class="button-secondary eval-mini-btn" type="button">Refresh</button>
+                </div>
+                <div class="eval-metrics-line">
+                  <span class="eval-metrics-label">Selected</span>
+                  <strong><span id="evalSelectedCount">0</span></strong>
+                  <span class="eval-metrics-muted">turns</span>
+                  <button id="clearEvalSelection" class="button-secondary eval-mini-btn" type="button">Clear</button>
+                </div>
               </div>
             </div>
 
@@ -150,6 +160,14 @@
                 <input id="evalIncludeDetails" type="checkbox" />
                 <span>Include Details</span>
               </label>
+            </div>
+
+            <div class="eval-label-row">
+              <div class="eval-current">
+                <span class="eval-metrics-label">Current query</span>
+                <span id="evalCurrentQuery" class="eval-current-query"></span>
+              </div>
+              <button id="saveEvalExample" class="button-secondary" type="button">Save Eval Example</button>
             </div>
 
             <div class="eval-profiles">
